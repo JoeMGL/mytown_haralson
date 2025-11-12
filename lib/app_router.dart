@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:visit_haralson/features/admin/dashboard_page.dart';
 
 import 'models/place.dart';
 import 'features/home/home_page.dart';
@@ -7,6 +8,12 @@ import 'features/explore/explore_page.dart';
 import 'features/events/events_page.dart';
 import 'features/shell/bottom_nav_shell.dart';
 import 'features/explore/explore_detail_page.dart';
+
+import 'features/admin/attractions_page.dart';
+import 'features/admin/add_attraction_page.dart';
+import 'features/admin/add_announcement_page.dart';
+import 'features/admin/add_event_page.dart';
+import 'features/admin/config/global.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -53,6 +60,34 @@ final GoRouter appRouter = GoRouter(
           path: '/events',
           name: 'events',
           builder: (context, state) => const EventsPage(),
+        ),
+        // Admin lives outside the tab index logic (no bottom tab switch)
+        GoRoute(
+          path: '/admin',
+          name: 'admin',
+          builder: (context, state) => const AdminDashboardPage(),
+          routes: [
+            // child route so it pushes on top of the dashboard
+            GoRoute(
+              path: 'attractions/new',
+              name: 'admin-add-attraction',
+              builder: (context, state) => const AddAttractionPage(),
+            ),
+            GoRoute(
+              path: '/admin/announcements/new',
+              name: 'addAnnouncement',
+              builder: (context, state) => const AddAnnouncementPage(),
+            ),
+            GoRoute(
+              path: 'events/add', // -> /admin/events/add
+              name: 'admin-add-event',
+              builder: (_, __) => const AddEventPage(),
+            ),
+            GoRoute(
+              path: 'settings', // note: no leading slash
+              builder: (c, s) => const AdminSettingsPage(),
+            ),
+          ],
         ),
       ],
     ),
