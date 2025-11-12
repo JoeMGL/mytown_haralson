@@ -3,9 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'app_router.dart';
 
-void main() {
+import 'package:firebase_core/firebase_core.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // TODO: await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: const FirebaseOptions(
+        apiKey: "AIzaSyC0iUCwHViywjjWctCnAzoLsZHUbohOWXk",
+        authDomain: "visit-haralson.firebaseapp.com",
+        projectId: "visit-haralson",
+        storageBucket: "visit-haralson.firebasestorage.app",
+        messagingSenderId: "721812855685",
+        appId: "1:721812855685:web:79d972c8965d0f312802ec",
+        measurementId: "G-H4BDP61CY6"),
+  );
   runApp(const ProviderScope(child: VisitHaralsonApp()));
 }
 
