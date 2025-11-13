@@ -1,59 +1,140 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/widgets/responsive.dart';
 
 class AdminShell extends StatelessWidget {
   final Widget child;
-  const AdminShell({super.key, required this.child});
+  final String? title;
+
+  const AdminShell({
+    super.key,
+    required this.child,
+    this.title,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final uri = GoRouterState.of(context).uri.toString();
+    final isAdminRoute = uri.startsWith('/admin');
+
     return Scaffold(
-      body: Row(
-        children: [
-          if (Responsive.isDesktop(context))
-            NavigationRail(
-              selectedIndex: _indexForLocation(GoRouterState.of(context).uri.toString()),
-              onDestinationSelected: (i) => _goTo(i, context),
-              labelType: NavigationRailLabelType.all,
-              destinations: const [
-                NavigationRailDestination(icon: Icon(Icons.dashboard_outlined), label: Text('Dashboard')),
-                NavigationRailDestination(icon: Icon(Icons.place_outlined), label: Text('Attractions')),
-                NavigationRailDestination(icon: Icon(Icons.event_outlined), label: Text('Events')),
-                NavigationRailDestination(icon: Icon(Icons.campaign_outlined), label: Text('Announcements')),
-                NavigationRailDestination(icon: Icon(Icons.settings_outlined), label: Text('Settings')),
-              ],
-            ),
-          Expanded(child: child),
+      drawer: const _AdminDrawer(),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading: Builder(
+          builder: (ctx) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(ctx).openDrawer(),
+            tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+          ),
+        ),
+        title: Text(title ?? 'Admin Dashboard'),
+        actions: [
+          // User / Admin toggle buttons
+          _RoleButton(
+            label: 'User',
+            icon: Icons.person_outline,
+            active: !isAdminRoute,
+            onTap: () {
+              if (!uri.startsWith('/admin')) return;
+              context.go('/'); // your main app home
+            },
+          ),
+          const SizedBox(width: 8),
+          _RoleButton(
+            label: 'Admin',
+            icon: Icons.admin_panel_settings_outlined,
+            active: isAdminRoute,
+            onTap: () {
+              if (uri.startsWith('/admin')) return;
+              context.go('/admin');
+            },
+          ),
+          const SizedBox(width: 12),
         ],
       ),
-      appBar: Responsive.isDesktop(context) ? null : AppBar(title: const Text('Admin')),
-      drawer: Responsive.isDesktop(context) ? null : Drawer(
+      body: SafeArea(child: child),
+    );
+  }
+}
+
+/// Drawer with all admin sections
+class _AdminDrawer extends StatelessWidget {
+  const _AdminDrawer();
+
+  @override
+  Widget build(BuildContext context) {
+    final uri = GoRouterState.of(context).uri.toString();
+
+    ListTile tile(String label, String route, IconData icon) {
+      final selected = uri == route || uri.startsWith('$route/');
+      return ListTile(
+        leading: Icon(icon),
+        title: Text(label),
+        selected: selected,
+        onTap: () {
+          Navigator.of(context).pop(); // close drawer
+          context.go(route);
+        },
+      );
+    }
+
+    return Drawer(
+      child: SafeArea(
         child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
-            const DrawerHeader(child: Text('Visit Haralson Admin')),
-            ListTile(title: const Text('Dashboard'), onTap: (){ context.go('/admin'); }),
-            ListTile(title: const Text('Attractions'), onTap: (){ context.go('/admin/attractions'); }),
-            ListTile(title: const Text('Announcements'), onTap: (){ context.go('/admin/announcements'); }),
+            const ListTile(
+              title: Text(
+                'VISIT HARALSON',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text('Admin Panel'),
+            ),
+            const Divider(),
+            tile('Dashboard', '/admin', Icons.dashboard_outlined),
+            tile('Attractions', '/admin/attractions', Icons.park_outlined),
+            tile('Events', '/admin/events', Icons.event_outlined),
+            tile('Dining', '/admin/dining', Icons.restaurant_outlined),
+            tile('Lodging', '/admin/lodging', Icons.hotel_outlined),
+            tile('Shops', '/admin/shops', Icons.storefront_outlined),
+            tile('Announcements', '/admin/announcements',
+                Icons.campaign_outlined),
+            tile('Media', '/admin/media', Icons.perm_media_outlined),
+            tile('Users & Roles', '/admin/users', Icons.group_outlined),
+            tile('Settings', '/admin/settings', Icons.settings_outlined),
           ],
         ),
       ),
     );
   }
+}
 
-  int _indexForLocation(String loc) {
-    if (loc.contains('/admin/attractions')) return 1;
-    if (loc.contains('/admin/events')) return 2;
-    if (loc.contains('/admin/announcements')) return 3;
-    return 0;
-  }
-  void _goTo(int i, BuildContext context) {
-    switch (i) {
-      case 0: context.go('/admin'); break;
-      case 1: context.go('/admin/attractions'); break;
-      case 2: context.go('/admin/events'); break;
-      case 3: context.go('/admin/announcements'); break;
-      case 4: context.go('/admin/settings'); break;
-    }
+class _RoleButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _RoleButton({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return TextButton.icon(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        foregroundColor: active ? scheme.onPrimary : scheme.primary,
+        backgroundColor: active ? scheme.primary : Colors.transparent,
+      ),
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+    );
   }
 }

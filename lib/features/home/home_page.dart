@@ -46,6 +46,7 @@ class HomePage extends StatelessWidget {
                       _quick(context, Icons.hotel, 'Stay', () {}),
                       _quick(context, Icons.event, 'Events',
                           () => context.go('/events')),
+                      _quick(context, Icons.group, 'Clubs & Groups', () {})
                     ],
                   ),
                   const SizedBox(height: 16),

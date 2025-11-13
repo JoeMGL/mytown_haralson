@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../dev/dev_drawer.dart';
-
 class BottomNavShell extends StatelessWidget {
   final int index;
   final Widget child;
@@ -20,7 +18,7 @@ class BottomNavShell extends StatelessWidget {
           : null,
 
       // Drawer automatically adds the hamburger button to the AppBar
-      drawer: kDebugMode ? const DevDrawer() : null,
+      //drawer: kDebugMode ? const DevDrawer() : null,
 
       body: child,
 
