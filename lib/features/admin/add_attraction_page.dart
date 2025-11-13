@@ -9,12 +9,22 @@ class AddAttractionPage extends StatefulWidget {
 
 class _AddAttractionPageState extends State<AddAttractionPage> {
   final _form = GlobalKey<FormState>();
+
+  // Core fields
   String _name = '';
   String _city = 'Tallapoosa';
   String _category = 'Outdoor';
   String _coords = '';
   bool _featured = false;
   bool _saving = false;
+
+  // Fields used by ExploreDetailPage
+  String _imageUrl = '';
+  String _heroTag = '';
+  String _description = '';
+  String _hours = '';
+  String _tagsText = ''; // comma-separated input, saved as List<String>
+  String _mapQuery = '';
 
   GeoPoint? _parseLatLng(String input) {
     final t = input.trim();
@@ -27,115 +37,190 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
     return GeoPoint(lat, lng);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // NO Scaffold here – AdminShell wraps this and provides AppBar + SafeArea
-    return Form(
-      key: _form,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Add Attraction',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            decoration: const InputDecoration(labelText: 'Name'),
-            onSaved: (v) => _name = v ?? '',
-            validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField(
-            value: _city,
-            decoration: const InputDecoration(labelText: 'City'),
-            items: const ['Tallapoosa', 'Bremen', 'Buchanan', 'Waco']
-                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                .toList(),
-            onChanged: (v) => setState(() => _city = v!),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField(
-            value: _category,
-            decoration: const InputDecoration(labelText: 'Category'),
-            items: const ['Outdoor', 'Museum', 'Landmark', 'Family']
-                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                .toList(),
-            onChanged: (v) => setState(() => _category = v!),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            decoration:
-                const InputDecoration(labelText: 'Coordinates (lat,lng)'),
-            onSaved: (v) => _coords = v ?? '',
-            validator: (v) {
-              if (v == null || v.trim().isEmpty) return null; // optional
-              final ok = _parseLatLng(v) != null;
-              return ok ? null : 'Use "lat,lng" (e.g. 33.744,-85.289)';
-            },
-          ),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            value: _featured,
-            onChanged: (v) => setState(() => _featured = v),
-            title: const Text('Featured'),
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: _saving ? null : _submit,
-            icon: _saving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.save),
-            label: Text(_saving ? 'Saving...' : 'Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _submit() async {
+  Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     _form.currentState!.save();
 
-    final geo = _parseLatLng(_coords);
-
     setState(() => _saving = true);
+
     try {
-      final doc = {
-        'name': _name.trim(),
+      final geo = _parseLatLng(_coords);
+
+      // convert comma-separated tags to List<String>
+      final tags = _tagsText
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+
+      await FirebaseFirestore.instance.collection('attractions').add({
+        // existing fields
+        'name': _name,
         'city': _city,
         'category': _category,
+        'coords': geo,
         'featured': _featured,
-        if (geo != null) 'location': geo,
-        'coords_raw': _coords.trim(),
-        'search': [
-          _name.toLowerCase(),
-          _city.toLowerCase(),
-          _category.toLowerCase(),
-        ],
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
 
-      await FirebaseFirestore.instance.collection('attractions').add(doc);
+        // fields used by ExploreDetailPage
+        'title': _name, // or store separately if you want
+        'imageUrl': _imageUrl,
+        'heroTag': _heroTag.isEmpty ? _name : _heroTag,
+        'description': _description,
+        'hours': _hours.isEmpty ? null : _hours,
+        'tags': tags,
+        'mapQuery': _mapQuery.isEmpty ? null : _mapQuery,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Attraction saved to Firestore ✅')),
-        );
-        Navigator.of(context).pop(); // go back after save
+        Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving attraction: $e')),
+      );
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+      }
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Add Attraction')),
+      body: Form(
+        key: _form,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Name / Title
+            TextFormField(
+              decoration: const InputDecoration(labelText: 'Name / Title'),
+              onSaved: (v) => _name = v?.trim() ?? '',
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+
+            // Image URL
+            TextFormField(
+              decoration: const InputDecoration(
+                  labelText: 'Image URL (Unsplash or other)'),
+              onSaved: (v) => _imageUrl = v?.trim() ?? '',
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+
+            // Hero Tag
+            TextFormField(
+              decoration: const InputDecoration(
+                labelText: 'Hero Tag (optional)',
+                helperText:
+                    'Used for Hero animation; defaults to Name if empty',
+              ),
+              onSaved: (v) => _heroTag = v?.trim() ?? '',
+            ),
+            const SizedBox(height: 12),
+
+            // Description
+            TextFormField(
+              decoration: const InputDecoration(labelText: 'Description'),
+              maxLines: 4,
+              onSaved: (v) => _description = v?.trim() ?? '',
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+
+            // Hours
+            TextFormField(
+              decoration: const InputDecoration(
+                labelText: 'Hours (optional)',
+                hintText: 'e.g. Mon–Sat 10am–6pm',
+              ),
+              onSaved: (v) => _hours = v?.trim() ?? '',
+            ),
+            const SizedBox(height: 12),
+
+            // Tags
+            TextFormField(
+              decoration: const InputDecoration(
+                labelText: 'Tags (comma-separated)',
+                hintText: 'e.g. Family-friendly, Outdoors, Free',
+              ),
+              onSaved: (v) => _tagsText = v?.trim() ?? '',
+            ),
+            const SizedBox(height: 12),
+
+            // Map query
+            TextFormField(
+              decoration: const InputDecoration(
+                labelText: 'Map Query (optional)',
+                helperText:
+                    'If empty, Google Maps search will use the title instead',
+              ),
+              onSaved: (v) => _mapQuery = v?.trim() ?? '',
+            ),
+            const SizedBox(height: 20),
+
+            // Existing fields: City, Category, Coords, Featured
+            DropdownButtonFormField<String>(
+              value: _city,
+              decoration: const InputDecoration(labelText: 'City'),
+              items: const ['Tallapoosa', 'Bremen', 'Buchanan', 'Waco']
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) => setState(() => _city = v ?? _city),
+            ),
+            const SizedBox(height: 12),
+
+            DropdownButtonFormField<String>(
+              value: _category,
+              decoration: const InputDecoration(labelText: 'Category'),
+              items: const [
+                'Outdoor',
+                'History',
+                'Shopping',
+                'Dining',
+                'Lodging'
+              ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              onChanged: (v) => setState(() => _category = v ?? _category),
+            ),
+            const SizedBox(height: 12),
+
+            TextFormField(
+              decoration: const InputDecoration(
+                labelText: 'Coords (lat,lng)',
+                hintText: 'e.g. 33.744,-85.287',
+              ),
+              onSaved: (v) => _coords = v?.trim() ?? '',
+            ),
+            const SizedBox(height: 8),
+
+            SwitchListTile(
+              title: const Text('Featured'),
+              value: _featured,
+              onChanged: (v) => setState(() => _featured = v),
+            ),
+            const SizedBox(height: 20),
+
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save Attraction'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -6,9 +6,12 @@ import 'package:visit_haralson/features/admin/add_event_page.dart';
 import 'package:visit_haralson/features/admin/config/global.dart';
 import 'app_shell.dart';
 
+import 'models/place.dart';
+
 // PUBLIC PAGES
 import 'features/home/home_page.dart';
 import 'features/explore/explore_page.dart';
+import 'features/explore/explore_detail_page.dart';
 import 'features/events/events_page.dart';
 
 // ADMIN PAGES
@@ -34,13 +37,29 @@ final GoRouter appRouter = GoRouter(
       ),
       routes: [
         GoRoute(
-          path: 'explore',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AppShell(
-              title: 'Explore',
-              child: ExplorePage(),
+          path: '/explore',
+          name: 'explore',
+          builder: (context, state) => const ExplorePage(),
+          routes: [
+            // 🔹 Explore detail page
+            GoRoute(
+              path: 'detail',
+              name: 'exploreDetail',
+              builder: (context, state) {
+                final place = state.extra as Place;
+
+                return ExploreDetailPage(
+                  title: place.title,
+                  imageUrl: place.imageUrl,
+                  heroTag: place.heroTag,
+                  description: place.description,
+                  hours: place.hours,
+                  tags: place.tags,
+                  mapQuery: place.mapQuery,
+                );
+              },
             ),
-          ),
+          ],
         ),
         GoRoute(
           path: 'events',

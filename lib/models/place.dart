@@ -1,3 +1,4 @@
+// lib/models/place.dart
 class Place {
   final String title;
   final String imageUrl;
@@ -7,7 +8,7 @@ class Place {
   final List<String> tags;
   final String? mapQuery;
 
-  const Place({
+  Place({
     required this.title,
     required this.imageUrl,
     required this.heroTag,
