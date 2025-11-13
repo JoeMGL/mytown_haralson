@@ -260,14 +260,19 @@ class _AddEventPageState extends State<AddEventPage> {
         'venue': _venue.trim(),
         'address': _address.trim(),
         'description': _description.trim(),
-        'externalLink':
-            _externalLink.trim().isEmpty ? null : _externalLink.trim(),
+
+        // 🔁 match EventDetailPage field name
+        'website': _externalLink.trim().isEmpty ? null : _externalLink.trim(),
+
         'featured': _featured,
         'allDay': _allDay,
         'free': _free,
         'price': _free ? 0 : _price,
-        'startsAt': _start.toUtc(),
-        'endsAt': _end.toUtc(),
+
+        // 🔁 match EventsPage: it expects "start" and "end"
+        'start': _start, // Firestore will store as Timestamp
+        'end': _end,
+
         'search': [
           _title.toLowerCase(),
           _city.toLowerCase(),
