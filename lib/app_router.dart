@@ -1,27 +1,33 @@
+// lib/app_router.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:visit_haralson/features/admin/add_announcement_page.dart';
-import 'package:visit_haralson/features/admin/add_attraction_page.dart';
-import 'package:visit_haralson/features/admin/add_event_page.dart';
-import 'package:visit_haralson/features/admin/config/global.dart';
-import 'app_shell.dart';
 
+// MODELS
 import 'models/place.dart';
+import 'models/eat_and_drink_model.dart';
+
+// SHELLS
+import 'app_shell.dart';
+import 'features/admin/admin_shell.dart';
 
 // PUBLIC PAGES
 import 'features/home/home_page.dart';
 import 'features/explore/explore_page.dart';
 import 'features/explore/explore_detail_page.dart';
 import 'features/events/events_page.dart';
+import 'features/eat_and_drink/eat_and_drink_page.dart';
+import 'features/eat_and_drink/eat_and_drink_details_page.dart';
 
 // ADMIN PAGES
 import 'features/admin/dashboard_page.dart';
-import 'features/admin/admin_shell.dart';
+import 'features/admin/add_attraction_page.dart';
+import 'features/admin/add_event_page.dart';
 import 'features/admin/add_dining_page.dart';
 import 'features/admin/add_lodging_page.dart';
 import 'features/admin/add_shops_page.dart';
 import 'features/admin/users_and_roles_page.dart';
-// import other admin pages…
+import 'features/admin/add_announcement_page.dart';
+import 'features/admin/config/global.dart'; // adjust if your file is named differently
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -29,19 +35,24 @@ final GoRouter appRouter = GoRouter(
     // -------- PUBLIC --------
     GoRoute(
       path: '/',
-      pageBuilder: (context, state) => NoTransitionPage(
-        child: const AppShell(
+      pageBuilder: (context, state) => const NoTransitionPage(
+        child: AppShell(
           title: 'Home',
-          child: HomePage(), // your public home
+          child: HomePage(),
         ),
       ),
       routes: [
+        // /explore
         GoRoute(
-          path: '/explore',
-          name: 'explore',
-          builder: (context, state) => const ExplorePage(),
+          path: 'explore',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AppShell(
+              title: 'Explore',
+              child: ExplorePage(),
+            ),
+          ),
           routes: [
-            // 🔹 Explore detail page
+            // /explore/detail
             GoRoute(
               path: 'detail',
               name: 'exploreDetail',
@@ -49,7 +60,7 @@ final GoRouter appRouter = GoRouter(
                 final place = state.extra as Place;
 
                 return ExploreDetailPage(
-                  title: place.title,
+                  title: place.title, // Place.name (not title)
                   imageUrl: place.imageUrl,
                   heroTag: place.heroTag,
                   description: place.description,
@@ -61,6 +72,8 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+
+        // /events
         GoRoute(
           path: 'events',
           pageBuilder: (context, state) => const NoTransitionPage(
@@ -69,6 +82,39 @@ final GoRouter appRouter = GoRouter(
               child: EventsPage(),
             ),
           ),
+        ),
+
+        // /eat
+        GoRoute(
+          path: 'eat',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AppShell(
+              title: 'Eat & Drink',
+              child: EatAndDrinkPage(),
+            ),
+          ),
+          routes: [
+            // /eat/detail
+            GoRoute(
+              path: 'detail',
+              name: 'eatDetail',
+              builder: (context, state) {
+                final eat = state.extra as EatAndDrink;
+
+                return EatAndDrinkDetailsPage(
+                  title: eat.name,
+                  imageUrl: eat.imageUrl,
+                  heroTag: eat.heroTag,
+                  description: eat.description,
+                  hours: eat.hours,
+                  tags: eat.tags,
+                  mapQuery: eat.mapQuery,
+                  phone: eat.phone,
+                  website: eat.website,
+                );
+              },
+            ),
+          ],
         ),
       ],
     ),
@@ -79,7 +125,7 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => const NoTransitionPage(
         child: AdminShell(
           title: 'Dashboard',
-          child: AdminDashboardPage(), // content-only widget
+          child: AdminDashboardPage(),
         ),
       ),
       routes: [
@@ -106,7 +152,7 @@ final GoRouter appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: AdminShell(
               title: 'Dining',
-              child: AddDiningPage(),
+              child: AddEatAndDrinkPage(),
             ),
           ),
         ),
@@ -151,20 +197,9 @@ final GoRouter appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: AdminShell(
               title: 'Announcements',
-              child: AddAnnouncementPage(), // TODO: AnnouncementsAdminPage()
+              child: AddAnnouncementPage(),
             ),
           ),
-          routes: [
-            GoRoute(
-              path: 'add',
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: AdminShell(
-                  title: 'Add Announcement',
-                  child: Placeholder(), // TODO: AddAnnouncementPage()
-                ),
-              ),
-            ),
-          ],
         ),
       ],
     ),
