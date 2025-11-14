@@ -97,6 +97,7 @@ class _AdminDrawer extends StatelessWidget {
             tile('Dining', '/admin/dining', Icons.restaurant_outlined),
             tile('Lodging', '/admin/lodging', Icons.hotel_outlined),
             tile('Shops', '/admin/shops', Icons.storefront_outlined),
+            tile('Clubs', '/admin/clubs', Icons.group_add_outlined),
             tile('Announcements', '/admin/announcements',
                 Icons.campaign_outlined),
             tile('Media', '/admin/media', Icons.perm_media_outlined),

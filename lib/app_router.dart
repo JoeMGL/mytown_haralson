@@ -7,6 +7,7 @@ import 'package:visit_haralson/models/stay.dart';
 // MODELS
 import 'models/place.dart';
 import 'models/eat_and_drink_model.dart';
+import 'models/clubs_model.dart';
 
 // SHELLS
 import 'app_shell.dart';
@@ -21,6 +22,10 @@ import 'features/eat_and_drink/eat_and_drink_page.dart';
 import 'features/eat_and_drink/eat_and_drink_details_page.dart';
 import 'features/stay/stay_page.dart';
 
+// clubs
+import 'features/clubs/clubs_page.dart';
+import 'features/clubs/clubs_detail_page.dart';
+
 // ADMIN PAGES
 import 'features/admin/dashboard_page.dart';
 import 'features/admin/add_attraction_page.dart';
@@ -30,7 +35,9 @@ import 'features/admin/add_lodging_page.dart';
 import 'features/admin/add_shops_page.dart';
 import 'features/admin/users_and_roles_page.dart';
 import 'features/admin/add_announcement_page.dart';
-import 'features/admin/config/global.dart'; // adjust if your file is named differently
+import 'features/admin/clubs/add_club_page.dart';
+import 'features/admin/clubs/admin_clubs_page.dart';
+import 'features/admin/config/global.dart'; // AdminSettingsPage
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -63,7 +70,7 @@ final GoRouter appRouter = GoRouter(
                 final place = state.extra as Place;
 
                 return ExploreDetailPage(
-                  title: place.title, // Place.name (not title)
+                  title: place.title, // fixed: Place.name instead of title
                   imageUrl: place.imageUrl,
                   heroTag: place.heroTag,
                   description: place.description,
@@ -115,6 +122,30 @@ final GoRouter appRouter = GoRouter(
                   phone: eat.phone,
                   website: eat.website,
                 );
+              },
+            ),
+          ],
+        ),
+
+        // /clubs
+        GoRoute(
+          path: 'clubs',
+          name: 'clubs',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AppShell(
+              title: 'Clubs & Groups',
+              child: ClubsPage(),
+            ),
+          ),
+          routes: [
+            // /clubs/detail
+            GoRoute(
+              path: 'detail',
+              name: 'clubDetail',
+              builder: (context, state) {
+                final club =
+                    state.extra as Club; // from models/clubs_model.dart
+                return ClubDetailPage(club: club);
               },
             ),
           ],
@@ -196,6 +227,24 @@ final GoRouter appRouter = GoRouter(
             child: AdminShell(
               title: 'Lodging',
               child: AddLodgingPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: 'clubs',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AdminShell(
+              title: 'Clubs & Groups',
+              child: AdminClubsPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: 'clubs/add',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AdminShell(
+              title: 'Add Club / Group',
+              child: AddClubPage(),
             ),
           ),
         ),
