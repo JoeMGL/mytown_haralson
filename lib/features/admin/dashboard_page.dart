@@ -65,7 +65,7 @@ class AdminDashboardPage extends StatelessWidget {
                         style: Theme.of(context).textTheme.headlineMedium),
                     const Spacer(),
                     FilledButton(
-                      onPressed: () => context.push('/admin/announcements/add'),
+                      onPressed: () => context.push('/admin/announcements'),
                       child: const Text('Add Announcement'),
                     ),
                   ],

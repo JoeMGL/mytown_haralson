@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../models/event.dart';
+
 class AddEventPage extends StatefulWidget {
   const AddEventPage({super.key});
   @override
@@ -44,7 +46,7 @@ class _AddEventPageState extends State<AddEventPage> {
 
   @override
   Widget build(BuildContext context) {
-    // NO Scaffold here – AdminShell wraps this and provides AppBar + SafeArea
+    // AdminShell wraps this, so no Scaffold here
     final ml = MaterialLocalizations.of(context);
 
     return Form(
@@ -138,7 +140,7 @@ class _AddEventPageState extends State<AddEventPage> {
           ),
           const SizedBox(height: 8),
 
-          // Start / End (tap to pick)
+          // Start / End
           Row(
             children: [
               Expanded(
@@ -197,11 +199,13 @@ class _AddEventPageState extends State<AddEventPage> {
                       const TextInputType.numberWithOptions(decimal: true),
                   validator: (v) {
                     if (_free) return null;
-                    if (v == null || v.trim().isEmpty)
+                    if (v == null || v.trim().isEmpty) {
                       return 'Enter a price or mark Free';
+                    }
                     final parsed = double.tryParse(v);
-                    if (parsed == null || parsed < 0)
+                    if (parsed == null || parsed < 0) {
                       return 'Enter a valid price';
+                    }
                     return null;
                   },
                   onSaved: (v) {
@@ -246,51 +250,49 @@ class _AddEventPageState extends State<AddEventPage> {
     if (!_form.currentState!.validate()) return;
     _form.currentState!.save();
 
-    // Guard end >= start
+    // Ensure end is after start
     if (!_end.isAfter(_start)) {
       _end = _start.add(const Duration(hours: 1));
     }
 
     setState(() => _saving = true);
     try {
-      final doc = {
-        'title': _title.trim(),
-        'city': _city,
-        'category': _category,
-        'venue': _venue.trim(),
-        'address': _address.trim(),
-        'description': _description.trim(),
-
-        // 🔁 match EventDetailPage field name
-        'website': _externalLink.trim().isEmpty ? null : _externalLink.trim(),
-
-        'featured': _featured,
-        'allDay': _allDay,
-        'free': _free,
-        'price': _free ? 0 : _price,
-
-        // 🔁 match EventsPage: it expects "start" and "end"
-        'start': _start, // Firestore will store as Timestamp
-        'end': _end,
-
-        'search': [
+      final event = Event(
+        id: '', // Firestore will assign
+        title: _title.trim(),
+        city: _city,
+        category: _category,
+        venue: _venue.trim(),
+        address: _address.trim(),
+        description: _description.trim(),
+        website: _externalLink.trim().isEmpty ? null : _externalLink.trim(),
+        featured: _featured,
+        allDay: _allDay,
+        free: _free,
+        price: _free ? 0 : (_price ?? 0),
+        start: _start,
+        end: _end,
+        imageUrl: null,
+        tags: const [],
+        search: [
           _title.toLowerCase(),
           _city.toLowerCase(),
           _category.toLowerCase(),
           _venue.toLowerCase(),
         ],
+      );
+
+      await FirebaseFirestore.instance.collection('events').add({
+        ...event.toMap(),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        // image fields can be added later
-      };
-
-      await FirebaseFirestore.instance.collection('events').add(doc);
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Event saved to Firestore ✅')),
         );
-        Navigator.of(context).pop(); // go back after save
+        Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
