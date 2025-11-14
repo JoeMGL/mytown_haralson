@@ -1,6 +1,8 @@
 // lib/app_router.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:visit_haralson/features/stay/stay_detail_page.dart';
+import 'package:visit_haralson/models/stay.dart';
 
 // MODELS
 import 'models/place.dart';
@@ -17,6 +19,7 @@ import 'features/explore/explore_detail_page.dart';
 import 'features/events/events_page.dart';
 import 'features/eat_and_drink/eat_and_drink_page.dart';
 import 'features/eat_and_drink/eat_and_drink_details_page.dart';
+import 'features/stay/stay_page.dart';
 
 // ADMIN PAGES
 import 'features/admin/dashboard_page.dart';
@@ -112,6 +115,28 @@ final GoRouter appRouter = GoRouter(
                   phone: eat.phone,
                   website: eat.website,
                 );
+              },
+            ),
+          ],
+        ),
+
+        // /stay
+        GoRoute(
+          path: 'stay',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AppShell(
+              title: 'Stay',
+              child: StayPage(),
+            ),
+          ),
+          routes: [
+            // /stay/detail
+            GoRoute(
+              path: 'detail',
+              name: 'stayDetail',
+              builder: (context, state) {
+                final stay = state.extra as Stay;
+                return StayDetailPage(stay: stay);
               },
             ),
           ],

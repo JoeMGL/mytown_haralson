@@ -43,7 +43,8 @@ class HomePage extends StatelessWidget {
                           () => context.go('/explore')),
                       _quick(context, Icons.restaurant, 'Eat & Drink',
                           () => context.go('/eat')),
-                      _quick(context, Icons.hotel, 'Stay', () {}),
+                      _quick(context, Icons.hotel, 'Stay',
+                          () => context.go('/stay')),
                       _quick(context, Icons.event, 'Events',
                           () => context.go('/events')),
                       _quick(context, Icons.group, 'Clubs & Groups', () {})
