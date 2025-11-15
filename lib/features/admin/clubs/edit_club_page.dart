@@ -30,7 +30,7 @@ class _EditClubPageState extends State<EditClubPage> {
   late String _facebook;
   late bool _featured;
   late bool _active;
-  late String _city;
+  late String _adderss;
 
   // location
   String? _stateId;
@@ -68,7 +68,7 @@ class _EditClubPageState extends State<EditClubPage> {
     _facebook = c.facebook;
     _featured = c.featured;
     _active = c.active;
-    _city = c.city;
+    _adderss = c.address;
 
     _stateId = c.stateId.isNotEmpty ? c.stateId : null;
     _stateName = c.stateName;
@@ -116,7 +116,7 @@ class _EditClubPageState extends State<EditClubPage> {
         'metroName': _metroName ?? '',
         'areaId': _areaId,
         'areaName': _areaName ?? '',
-        'city': _city.trim(),
+        'address': _adderss.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -190,12 +190,12 @@ class _EditClubPageState extends State<EditClubPage> {
               const SizedBox(height: 12),
 
               TextFormField(
-                initialValue: _city,
+                initialValue: _adderss,
                 decoration: const InputDecoration(
-                  labelText: 'City',
-                  hintText: 'Tallapoosa, Bremen, Buchanan…',
+                  labelText: 'Address',
+                  hintText: '123 Main Street',
                 ),
-                onSaved: (v) => _city = v ?? '',
+                onSaved: (v) => _adderss = v ?? '',
               ),
               const SizedBox(height: 16),
 

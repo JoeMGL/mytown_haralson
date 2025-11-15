@@ -11,7 +11,7 @@ class Club {
   final String metroName;
   final String areaId;
   final String areaName;
-  final String city;
+  final String address;
 
   // Core fields
   final String name;
@@ -41,7 +41,7 @@ class Club {
     required this.metroName,
     required this.areaId,
     required this.areaName,
-    required this.city,
+    required this.address,
     required this.name,
     required this.category,
     required this.meetingLocation,
@@ -69,7 +69,7 @@ class Club {
       metroName: data['metroName'] ?? '',
       areaId: data['areaId'] ?? '',
       areaName: data['areaName'] ?? '',
-      city: data['city'] ?? '',
+      address: data['address'] ?? '',
       name: data['name'] ?? '',
       category: data['category'] ?? '',
       meetingLocation: data['meetingLocation'] ?? '',
@@ -95,7 +95,7 @@ class Club {
       'metroName': metroName,
       'areaId': areaId,
       'areaName': areaName,
-      'city': city,
+      'address': address,
       'name': name,
       'category': category,
       'meetingLocation': meetingLocation,

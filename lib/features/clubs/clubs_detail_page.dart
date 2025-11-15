@@ -38,7 +38,7 @@ class ClubDetailPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '${club.city} • ${club.category}',
+            '${club.address} • ${club.category}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
 

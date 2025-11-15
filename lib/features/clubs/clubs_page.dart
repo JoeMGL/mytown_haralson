@@ -157,7 +157,7 @@ class _ClubsPageState extends State<ClubsPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 4),
-                            Text('${club.city} • ${club.category}'),
+                            Text('${club.address} • ${club.category}'),
                             if (club.meetingSchedule.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),

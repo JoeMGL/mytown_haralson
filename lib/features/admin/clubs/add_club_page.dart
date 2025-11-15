@@ -34,7 +34,7 @@ class _AddClubPageState extends State<AddClubPage> {
   String? _metroName;
   String? _areaId;
   String? _areaName;
-  String _city = '';
+  String _address = '';
 
   // Loaded docs
   List<QueryDocumentSnapshot> _states = [];
@@ -169,7 +169,7 @@ class _AddClubPageState extends State<AddClubPage> {
         'metroName': _metroName ?? '',
         'areaId': _areaId,
         'areaName': _areaName ?? '',
-        'city': _city.trim(),
+        'address': _address.trim(),
 
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -245,6 +245,16 @@ class _AddClubPageState extends State<AddClubPage> {
                 },
               ),
               const SizedBox(height: 12),
+
+              TextFormField(
+                initialValue: _address,
+                decoration: const InputDecoration(
+                  labelText: 'Address',
+                  hintText: '123 Main Street',
+                ),
+                onSaved: (v) => _address = v ?? '',
+              ),
+              const SizedBox(height: 16),
 
               // MEETING INFO
               TextFormField(

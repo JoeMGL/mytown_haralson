@@ -249,7 +249,7 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${club.city} • ${club.category}'),
+                          Text('${club.address} • ${club.category}'),
                           if (club.meetingSchedule.isNotEmpty)
                             Text(
                               club.meetingSchedule,
