@@ -1,11 +1,100 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-class HomePage extends StatelessWidget {
+import '/core/location/location_provider.dart'; // adjust path if needed
+
+class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locationAsync = ref.watch(locationProvider);
+
+    return locationAsync.when(
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        body: Center(child: Text('Error loading location: $e')),
+      ),
+      data: (loc) {
+        final stateId = loc.stateId;
+        final metroId = loc.metroId;
+
+        // If no location configured yet → generic Haralson home
+        if (stateId == null || metroId == null) {
+          return _buildScaffold(
+            context,
+            title: 'VISIT HARALSON',
+            nearMeLabel: 'Haralson County',
+            heroImageUrl:
+                'https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1600',
+          );
+        }
+
+        // Load the active metro doc:
+        final metroRef = FirebaseFirestore.instance
+            .collection('states')
+            .doc(stateId)
+            .collection('metros')
+            .doc(metroId);
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: metroRef.snapshots(),
+          builder: (context, snapshot) {
+            // While metro doc loads, just use generic but still show app
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return _buildScaffold(
+                context,
+                title: 'VISIT HARALSON',
+                nearMeLabel: 'Haralson County',
+                heroImageUrl:
+                    'https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1600',
+              );
+            }
+
+            final data = snapshot.data?.data() ?? {};
+
+            final metroName =
+                (data['name'] as String?)?.trim().isNotEmpty == true
+                    ? data['name'] as String
+                    : _prettyFromId(metroId);
+
+            final heroImageUrl = (data['heroImageUrl'] as String?)
+                        ?.trim()
+                        .isNotEmpty ==
+                    true
+                ? data['heroImageUrl'] as String
+                : 'https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1600';
+
+            // Optional: you could use slug or tagline later:
+            // final slug = data['slug'] as String?;
+            // final tagline = data['tagline'] as String?;
+
+            return _buildScaffold(
+              context,
+              title: 'VISIT $metroName'.toUpperCase(),
+              nearMeLabel: metroName,
+              heroImageUrl: heroImageUrl,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Main scaffold UI. We just pass in the dynamic pieces:
+  /// - [title] for the app bar
+  /// - [nearMeLabel] for "Near Me in X"
+  /// - [heroImageUrl] for the header image
+  Widget _buildScaffold(
+    BuildContext context, {
+    required String title,
+    required String nearMeLabel,
+    required String heroImageUrl,
+  }) {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -16,12 +105,12 @@ class HomePage extends StatelessWidget {
             flexibleSpace: FlexibleSpaceBar(
               titlePadding:
                   const EdgeInsetsDirectional.only(start: 16, bottom: 12),
-              title: const Text('VISIT HARALSON'),
+              title: Text(title),
               background: Stack(
                 fit: StackFit.expand,
                 children: [
                   Image.network(
-                    'https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1600',
+                    heroImageUrl,
                     fit: BoxFit.cover,
                   ),
                   Container(color: Colors.black.withValues(alpha: 0.35)),
@@ -57,33 +146,30 @@ class HomePage extends StatelessWidget {
                       hintText: 'Search restaurants, trails or festivals…',
                       prefixIcon: const Icon(Icons.search),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  Text('Near Me',
-                      style: Theme.of(context).textTheme.titleLarge),
+
+                  // 🔹 Now truly "Near Me in {metro name from Firestore}"
+                  Text(
+                    'Near Me in $nearMeLabel',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 8),
                   _nearMeCard(),
                   const SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: .15),
-                      borderRadius: BorderRadius.circular(12),
-                      border:
-                          Border.all(color: Colors.amber.withValues(alpha: .4)),
-                    ),
-                    padding: const EdgeInsets.all(14),
-                    child: const Text(
-                      'Did You Know?\nBuchanan is home to the historic Haralson County Courthouse (1891).',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
+
+                  // Simple generic banner for now; later you can also drive this
+                  // off metro fields (e.g., tagline, featured attraction, etc.)
+                  _genericBanner(nearMeLabel),
+
                   const SizedBox(height: 24),
                 ],
               ),
             ),
-          )
+          ),
         ],
       ),
     );
@@ -101,14 +187,16 @@ class HomePage extends StatelessWidget {
             color: Theme.of(ctx).colorScheme.primary.withValues(alpha: .12),
             borderRadius: BorderRadius.circular(16),
           ),
-          padding: const EdgeInsets.all(8), // 10 → 8 gives a bit more room
+          padding: const EdgeInsets.all(8),
           child: Column(
             mainAxisSize: MainAxisSize.max,
             children: [
-              Icon(icon,
-                  size: 22,
-                  color: Theme.of(ctx).colorScheme.primary), // 24 → 22
-              const SizedBox(height: 4), // 6 → 4
+              Icon(
+                icon,
+                size: 22,
+                color: Theme.of(ctx).colorScheme.primary,
+              ),
+              const SizedBox(height: 4),
               Expanded(
                 child: Center(
                   child: Text(
@@ -142,4 +230,33 @@ class HomePage extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
         ),
       );
+
+  /// Simple banner for now – you can later make this metro-specific by:
+  /// - adding `bannerText` or `tagline` to the metro doc
+  /// - or looking up a featured attraction for that metro
+  Widget _genericBanner(String nearMeLabel) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: .15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.withValues(alpha: .4)),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Text(
+        'Did You Know?\nDiscover hidden gems and local favorites around $nearMeLabel.',
+        style: const TextStyle(fontSize: 16),
+      ),
+    );
+  }
+
+  /// Turn a doc id like "atlanta-metro" or a path "states/ga/metros/atlanta-metro"
+  /// into "Atlanta Metro"
+  String _prettyFromId(String raw) {
+    final lastSegment = raw.split('/').last;
+    return lastSegment
+        .split(RegExp(r'[_\- ]+'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => part[0].toUpperCase() + part.substring(1))
+        .join(' ');
+  }
 }

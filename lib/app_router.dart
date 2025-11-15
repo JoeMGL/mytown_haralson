@@ -1,6 +1,8 @@
 // lib/app_router.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:visit_haralson/features/admin/events/admin_events_page.dart';
+import 'package:visit_haralson/features/admin/locations/admin_location_setup_page.dart';
 import 'package:visit_haralson/features/stay/stay_detail_page.dart';
 import 'package:visit_haralson/models/stay.dart';
 
@@ -29,7 +31,7 @@ import 'features/clubs/clubs_detail_page.dart';
 // ADMIN PAGES
 import 'features/admin/dashboard_page.dart';
 import 'features/admin/add_attraction_page.dart';
-import 'features/admin/add_event_page.dart';
+import 'features/admin/events/admin_add_event_page.dart';
 import 'features/admin/add_dining_page.dart';
 import 'features/admin/add_lodging_page.dart';
 import 'features/admin/add_shops_page.dart';
@@ -199,7 +201,7 @@ final GoRouter appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: AdminShell(
               title: 'Events',
-              child: AddEventPage(),
+              child: AdminEventsPage(),
             ),
           ),
         ),
@@ -254,6 +256,15 @@ final GoRouter appRouter = GoRouter(
             child: AdminShell(
               title: 'Users & Roles',
               child: UsersAndRolesPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: 'locations',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AdminShell(
+              title: 'Locations',
+              child: AdminLocationSetupPage(),
             ),
           ),
         ),
