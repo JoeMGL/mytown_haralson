@@ -32,6 +32,7 @@ import 'features/clubs/clubs_detail_page.dart';
 import 'features/admin/dashboard_page.dart';
 import 'features/admin/add_attraction_page.dart';
 import 'features/admin/events/admin_add_event_page.dart';
+import 'features/admin/clubs/edit_club_page.dart';
 import 'features/admin/add_dining_page.dart';
 import 'features/admin/add_lodging_page.dart';
 import 'features/admin/add_shops_page.dart';
@@ -249,6 +250,19 @@ final GoRouter appRouter = GoRouter(
               child: AddClubPage(),
             ),
           ),
+        ),
+        GoRoute(
+          path: 'clubs/edit',
+          pageBuilder: (context, state) {
+            final club = state.extra as Club;
+
+            return NoTransitionPage(
+              child: AdminShell(
+                title: 'Edit Club / Group',
+                child: EditClubPage(club: club),
+              ),
+            );
+          },
         ),
         GoRoute(
           path: 'users',

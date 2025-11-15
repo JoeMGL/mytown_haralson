@@ -1,10 +1,20 @@
-// lib/models/club.dart
+// lib/models/clubs_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Club {
   final String id;
-  final String name;
+
+  // Location
+  final String stateId;
+  final String stateName;
+  final String metroId;
+  final String metroName;
+  final String areaId;
+  final String areaName;
   final String city;
+
+  // Core fields
+  final String name;
   final String category;
 
   final String meetingLocation;
@@ -25,8 +35,14 @@ class Club {
 
   Club({
     required this.id,
-    required this.name,
+    required this.stateId,
+    required this.stateName,
+    required this.metroId,
+    required this.metroName,
+    required this.areaId,
+    required this.areaName,
     required this.city,
+    required this.name,
     required this.category,
     required this.meetingLocation,
     required this.meetingSchedule,
@@ -41,14 +57,20 @@ class Club {
     required this.updatedAt,
   });
 
-  /// Create a Club object from Firestore
+  /// Firestore → Model
   factory Club.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
 
     return Club(
       id: doc.id,
-      name: data['name'] ?? '',
+      stateId: data['stateId'] ?? '',
+      stateName: data['stateName'] ?? '',
+      metroId: data['metroId'] ?? '',
+      metroName: data['metroName'] ?? '',
+      areaId: data['areaId'] ?? '',
+      areaName: data['areaName'] ?? '',
       city: data['city'] ?? '',
+      name: data['name'] ?? '',
       category: data['category'] ?? '',
       meetingLocation: data['meetingLocation'] ?? '',
       meetingSchedule: data['meetingSchedule'] ?? '',
@@ -64,11 +86,17 @@ class Club {
     );
   }
 
-  /// Convert Club to Firestore map
+  /// Model → Firestore map
   Map<String, dynamic> toMap() {
     return {
-      'name': name,
+      'stateId': stateId,
+      'stateName': stateName,
+      'metroId': metroId,
+      'metroName': metroName,
+      'areaId': areaId,
+      'areaName': areaName,
       'city': city,
+      'name': name,
       'category': category,
       'meetingLocation': meetingLocation,
       'meetingSchedule': meetingSchedule,
@@ -84,7 +112,6 @@ class Club {
     };
   }
 
-  /// Helper to convert a Firestore Timestamp to DateTime
   static DateTime? _toDate(dynamic value) {
     if (value == null) return null;
     if (value is Timestamp) return value.toDate();

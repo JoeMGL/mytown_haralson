@@ -31,9 +31,6 @@ class AdminShell extends StatelessWidget {
         title: Text(title ?? 'Admin Dashboard'),
         actions: [
           // 🔽 DEV: Metro selector (backed by Firestore)
-          const _MetroDropdown(),
-          const SizedBox(width: 12),
-
           // User / Admin toggle buttons
           _RoleButton(
             label: 'User',
