@@ -51,7 +51,12 @@ class Place {
   final String zip;
 
   // Category / content
+  /// Primary category (slug) for quick filters
   final String category;
+
+  /// All category slugs (multi-select)
+  final List<String> categories;
+
   final String imageUrl;
   final String heroTag;
   final String description;
@@ -86,22 +91,37 @@ class Place {
     required this.id,
     required this.title,
     required this.name,
+
+    // Address
     required this.street,
     required this.city,
     required this.state,
     required this.zip,
+
+    // Category / content
     required this.category,
+    this.categories = const [],
     required this.imageUrl,
     required this.heroTag,
     required this.description,
-    required this.hours,
-    required this.hoursByDay,
-    required this.tags,
-    required this.mapQuery,
-    required this.coords,
+
+    // Hours
+    this.hours,
+    this.hoursByDay = const {},
+
+    // Extra meta
+    this.tags = const [],
+    this.mapQuery,
+    this.coords,
+
+    // Status
     required this.featured,
     required this.active,
-    required this.search,
+
+    // Search
+    this.search = const [],
+
+    // Location scoping
     required this.stateId,
     required this.stateName,
     required this.metroId,
@@ -129,6 +149,10 @@ class Place {
       });
     }
 
+    // Multi-categories
+    final categories =
+        (data['categories'] as List?)?.cast<String>() ?? const <String>[];
+
     return Place(
       id: doc.id,
       name: storedName,
@@ -141,6 +165,8 @@ class Place {
       zip: (data['zip'] ?? '') as String,
 
       category: (data['category'] ?? '') as String,
+      categories: categories,
+
       imageUrl: (data['imageUrl'] ?? '') as String,
       heroTag: (data['heroTag'] ?? doc.id) as String,
       description: (data['description'] ?? '') as String,
@@ -177,6 +203,7 @@ class Place {
       'zip': zip,
 
       'category': category,
+      'categories': categories,
       'imageUrl': imageUrl,
       'heroTag': heroTag,
       'description': description,
