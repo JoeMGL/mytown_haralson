@@ -129,7 +129,7 @@ class _LocationSelectorState extends State<LocationSelector> {
               orElse: () => null,
             );
         if (doc != null) {
-          final data = doc.data()!;
+          final data = doc.data();
           _stateName = data['name'] ?? '';
           await _loadMetros(fromInit: true);
         } else {
@@ -193,7 +193,7 @@ class _LocationSelectorState extends State<LocationSelector> {
               orElse: () => null,
             );
         if (match != null) {
-          final data = match.data()!;
+          final data = match.data();
           setState(() {
             _metroId = match.id;
             _metroName = data['name'] ?? match.id;
@@ -253,7 +253,7 @@ class _LocationSelectorState extends State<LocationSelector> {
               orElse: () => null,
             );
         if (match != null) {
-          final data = match.data()!;
+          final data = match.data();
           setState(() {
             _areaId = match.id;
             _areaName = data['name'] ?? match.id;

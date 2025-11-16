@@ -1,20 +1,8 @@
-// stay_page.dart
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../models/stay.dart';
-
-/// Filters for lodging, mapped to the `type` field from AddLodgingPage
-enum LodgingFilter { hotel, cabin, campground, bnb, rental }
-
-const lodgingFilterLabels = {
-  LodgingFilter.hotel: 'Hotel / Motel',
-  LodgingFilter.cabin: 'Cabin',
-  LodgingFilter.campground: 'Campground / RV Park',
-  LodgingFilter.bnb: 'Bed & Breakfast',
-  LodgingFilter.rental: 'Vacation Rental',
-};
 
 class StayPage extends StatefulWidget {
   const StayPage({super.key});
@@ -24,228 +12,222 @@ class StayPage extends StatefulWidget {
 }
 
 class _StayPageState extends State<StayPage> {
-  LodgingFilter filter = LodgingFilter.hotel;
+  String _categoryFilter = 'All';
+
+  static const _categories = [
+    'All',
+    'Hotel',
+    'Motel',
+    'Cabin / Cottage',
+    'Campground / RV Park',
+    'Vacation Rental',
+    'Other',
+  ];
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Stay')),
+      appBar: AppBar(
+        title: const Text('Stay'),
+      ),
       body: Column(
         children: [
-          // Filter chips (by lodging type)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: SingleChildScrollView(
+          // Category chips row
+          SizedBox(
+            height: 56,
+            child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              child: Row(
-                children: LodgingFilter.values.map((f) {
-                  final selected = f == filter;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(lodgingFilterLabels[f]!),
-                      selected: selected,
-                      onSelected: (_) {
-                        setState(() => filter = f);
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              itemCount: _categories.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final cat = _categories[index];
+                final selected = _categoryFilter == cat;
+
+                return ChoiceChip(
+                  label: Text(cat),
+                  selected: selected,
+                  onSelected: (_) {
+                    setState(() => _categoryFilter = cat);
+                  },
+                );
+              },
             ),
           ),
 
-          const SizedBox(height: 8),
+          const Divider(height: 1),
 
           // Lodging list
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
-                  .collection('lodging')
-                  .where('type', isEqualTo: lodgingFilterLabels[filter])
-                  //.orderBy('name')
+                  .collection('stays')
+                  .orderBy('name')
                   .snapshots(),
-              builder: (context, snap) {
-                if (snap.hasError) {
-                  return Center(
-                    child: Text('Error loading lodging: ${snap.error}'),
-                  );
-                }
-                if (!snap.hasData) {
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
-                final docs = snap.data!.docs;
-                if (docs.isEmpty) {
-                  return const Center(
-                    child: Text('No lodging found for this category yet.'),
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text('Error loading lodging: ${snapshot.error}'),
                   );
                 }
 
-                final stays = docs
-                    .map((doc) => Stay.fromDoc(doc))
-                    .toList(growable: false);
+                final docs = snapshot.data?.docs ?? [];
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text('No lodging options yet.'),
+                  );
+                }
+
+                var stays = docs
+                    .map((d) => Stay.fromDoc(d))
+                    .where((s) => s.active)
+                    .toList();
+
+                // Category filter
+                if (_categoryFilter != 'All') {
+                  stays = stays
+                      .where((s) => s.category == _categoryFilter)
+                      .toList();
+                }
+
+                if (stays.isEmpty) {
+                  return const Center(
+                    child: Text('No lodging matches this filter.'),
+                  );
+                }
 
                 return ListView.separated(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  itemCount: stays.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final stay = stays[index];
-                    return _StayTile(stay: stay);
+                    final heroTag = stay.heroTag.isNotEmpty
+                        ? stay.heroTag
+                        : 'stay_${stay.id}';
+
+                    final subtitleLines = <String>[];
+
+                    if (stay.category.isNotEmpty || stay.city.isNotEmpty) {
+                      subtitleLines.add(
+                        [
+                          if (stay.category.isNotEmpty) stay.category,
+                          if (stay.city.isNotEmpty) stay.city,
+                        ].join(' • '),
+                      );
+                    }
+
+                    if (stay.address.isNotEmpty) {
+                      subtitleLines.add(stay.address);
+                    }
+
+                    if (stay.hours != null && stay.hours!.isNotEmpty) {
+                      subtitleLines.add(stay.hours!);
+                    }
+
+                    return Card(
+                      clipBehavior: Clip.antiAlias,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: InkWell(
+                        onTap: () {
+                          context.pushNamed(
+                            'stayDetail', // matches router name
+                            extra: stay,
+                          );
+                        },
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Thumbnail image
+                            SizedBox(
+                              width: 120,
+                              height: 120,
+                              child: Hero(
+                                tag: heroTag,
+                                child: stay.imageUrl.isNotEmpty
+                                    ? Image.network(
+                                        stay.imageUrl,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Container(
+                                        color: cs.surfaceVariant,
+                                        child: Icon(
+                                          Icons.hotel,
+                                          size: 40,
+                                          color: cs.onSurfaceVariant,
+                                        ),
+                                      ),
+                              ),
+                            ),
+
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            stay.name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                        ),
+                                        if (stay.featured)
+                                          Icon(
+                                            Icons.star,
+                                            size: 18,
+                                            color: cs.primary,
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    if (subtitleLines.isNotEmpty)
+                                      Text(
+                                        subtitleLines.join('\n'),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    if (stay.description.isNotEmpty)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(top: 6.0),
+                                        child: Text(
+                                          stay.description,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   },
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemCount: stays.length,
                 );
               },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StayTile extends StatelessWidget {
-  const _StayTile({required this.stay});
-
-  final Stay stay;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () {
-        context.pushNamed('stayDetail', extra: stay);
-      },
-      child: Card(
-        elevation: 1.5,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // Icon "avatar"
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: .08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.hotel),
-              ),
-              const SizedBox(width: 12),
-
-              // Info column
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (stay.featured)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: cs.primary.withValues(alpha: .12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Featured',
-                          style: TextStyle(
-                            color: cs.primary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    if (stay.featured) const SizedBox(height: 4),
-
-                    Text(
-                      stay.name,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${stay.city} · ${stay.type}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      stay.address,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    // Amenity pills
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 2,
-                      children: [
-                        if (stay.hasBreakfast)
-                          _pill(context, Icons.free_breakfast, 'Breakfast'),
-                        if (stay.hasPool) _pill(context, Icons.pool, 'Pool'),
-                        if (stay.petFriendly)
-                          _pill(context, Icons.pets, 'Pet Friendly'),
-                      ],
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    // Contact row (icons only – you can wire tap handlers later)
-                    Row(
-                      children: [
-                        if (stay.phone.isNotEmpty) ...[
-                          Icon(Icons.phone, size: 16, color: cs.primary),
-                          const SizedBox(width: 8),
-                        ],
-                        if (stay.website.isNotEmpty)
-                          Icon(Icons.language, size: 16, color: cs.primary),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _pill(BuildContext context, IconData icon, String label) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: cs.secondaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: cs.onSecondaryContainer),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: cs.onSecondaryContainer,
             ),
           ),
         ],

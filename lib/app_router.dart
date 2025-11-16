@@ -1,5 +1,4 @@
 // lib/app_router.dart
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:visit_haralson/features/admin/events/admin_events_page.dart';
 import 'package:visit_haralson/features/admin/locations/admin_location_setup_page.dart';
@@ -32,25 +31,18 @@ import 'features/user/clubs/clubs_page.dart';
 import 'features/user/clubs/clubs_detail_page.dart';
 
 // ADMIN PAGES
+//
 // MODELS
-import 'models/place.dart';
-import 'models/eat_and_drink_model.dart';
-import 'models/clubs_model.dart';
-import 'models/shop.dart'; // 👈 ADD THIS
-import 'models/stay.dart'; // you can keep this here instead of top if you want
-
-// SHELLS
-import 'app_shell.dart';
-import 'features/admin/admin_shell.dart';
+import 'models/shop.dart';
 
 // ADMIN PAGES
 import 'features/admin/dashboard_page.dart';
 import 'features/admin/add_attraction_page.dart';
-import 'features/admin/events/admin_add_event_page.dart';
 import 'features/admin/clubs/edit_club_page.dart';
 import 'features/admin/add_dining_page.dart';
-import 'features/admin/add_lodging_page.dart';
-import 'features/admin/shop/admin_shop_page.dart';
+import 'features/admin/lodging/admin_lodging_page.dart';
+import 'features/admin/lodging/add_lodging_page.dart';
+import 'features/admin/lodging/edit_lodging_page.dart';
 import 'features/admin/shop/add_shops_page.dart';
 import 'features/admin/shop/admin_edit_shop_page.dart';
 import 'features/admin/users_and_roles_page.dart';
@@ -290,9 +282,32 @@ final GoRouter appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: AdminShell(
               title: 'Lodging',
-              child: AddLodgingPage(),
+              child: AdminLodgingPage(),
             ),
           ),
+          routes: [
+            GoRoute(
+              path: 'add',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: AdminShell(
+                  title: 'Add Lodging',
+                  child: AddLodgingPage(),
+                ),
+              ),
+            ),
+            GoRoute(
+              path: 'edit',
+              pageBuilder: (context, state) {
+                final stay = state.extra as Stay;
+                return NoTransitionPage(
+                  child: AdminShell(
+                    title: 'Edit Lodging',
+                    child: EditLodgingPage(stay: stay),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         GoRoute(
           path: 'clubs',

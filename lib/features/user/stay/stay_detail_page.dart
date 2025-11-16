@@ -1,17 +1,29 @@
-// lib/features/stay/stay_detail_page.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/stay.dart';
 
 class StayDetailPage extends StatelessWidget {
-  const StayDetailPage({super.key, required this.stay});
+  const StayDetailPage({
+    super.key,
+    required this.stay,
+  });
 
   final Stay stay;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
+    // Use heroTag if present, otherwise fall back to id
+    final heroTag = stay.heroTag.isNotEmpty ? stay.heroTag : 'stay_${stay.id}';
+
+    final regionLine = [
+      if (stay.city.isNotEmpty) stay.city,
+      if (stay.stateName.isNotEmpty) stay.stateName,
+      if (stay.metroName.isNotEmpty) stay.metroName,
+      if (stay.areaName.isNotEmpty) stay.areaName,
+    ].join(' • ');
 
     return Scaffold(
       appBar: AppBar(
@@ -20,167 +32,140 @@ class StayDetailPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Name + type + city
+          // Header image
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Hero(
+              tag: heroTag,
+              child: stay.imageUrl.isNotEmpty
+                  ? Image.network(
+                      stay.imageUrl,
+                      height: 220,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  : Container(
+                      height: 220,
+                      color: cs.surfaceVariant,
+                      child: Icon(
+                        Icons.hotel,
+                        size: 64,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Name
           Text(
             stay.name,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 4),
-          Text(
-            '${stay.city} · ${stay.type}',
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(color: cs.onSurfaceVariant),
-          ),
-          const SizedBox(height: 8),
 
-          if (stay.featured)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                'Featured',
-                style: TextStyle(
-                  color: cs.onPrimaryContainer,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+          // Category + region
+          if (stay.category.isNotEmpty || regionLine.isNotEmpty)
+            Text(
+              [
+                if (stay.category.isNotEmpty) stay.category,
+                if (regionLine.isNotEmpty) regionLine,
+              ].join(' • '),
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
-
-          const SizedBox(height: 16),
-
-          // Address
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.location_on, color: cs.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  stay.address,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Amenities chips
-          Text(
-            'Amenities',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              if (stay.hasBreakfast)
-                _amenityChip(context, Icons.free_breakfast, 'Breakfast'),
-              if (stay.hasPool) _amenityChip(context, Icons.pool, 'Pool'),
-              if (stay.petFriendly)
-                _amenityChip(context, Icons.pets, 'Pet Friendly'),
-              if (!stay.hasBreakfast && !stay.hasPool && !stay.petFriendly)
-                Text(
-                  'No amenities listed yet.',
-                  style: TextStyle(color: cs.onSurfaceVariant),
-                ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Contact & actions
-          Text(
-            'Contact & Info',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
           const SizedBox(height: 12),
 
-          if (stay.phone.isNotEmpty)
-            ListTile(
-              dense: true,
-              leading: const Icon(Icons.phone),
-              title: Text(stay.phone),
-              trailing: TextButton(
-                onPressed: () => _launchPhone(stay.phone),
-                child: const Text('Call'),
-              ),
+          // Address
+          if (stay.address.isNotEmpty)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_on_outlined, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    stay.address,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
             ),
 
-          if (stay.website.isNotEmpty)
-            ListTile(
-              dense: true,
-              leading: const Icon(Icons.language),
-              title: Text(
-                stay.website,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: TextButton(
-                onPressed: () => _launchWebsite(stay.website),
-                child: const Text('Visit'),
-              ),
+          // Hours
+          if (stay.hours != null && stay.hours!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.schedule, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    stay.hours!,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
             ),
+          ],
 
-          ListTile(
-            dense: true,
-            leading: const Icon(Icons.map),
-            title: Text(stay.address),
-            trailing: TextButton(
-              onPressed: () => _launchMaps('${stay.name}, ${stay.address}'),
-              child: const Text('Open in Maps'),
+          const SizedBox(height: 16),
+
+          // Description
+          if (stay.description.isNotEmpty) ...[
+            Text(
+              stay.description,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
+            const SizedBox(height: 16),
+          ],
+
+          // ACTION BUTTONS
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (stay.phone != null && stay.phone!.isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: () => _launchPhone(stay.phone!),
+                  icon: const Icon(Icons.call),
+                  label: const Text('Call'),
+                ),
+              if (stay.website != null && stay.website!.isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: () => _launchUrl(stay.website!),
+                  icon: const Icon(Icons.public),
+                  label: const Text('Website'),
+                ),
+              if (stay.mapQuery != null && stay.mapQuery!.isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final encoded = Uri.encodeComponent(stay.mapQuery!);
+                    final url =
+                        'https://www.google.com/maps/search/?api=1&query=$encoded';
+                    _launchUrl(url);
+                  },
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Open in Maps'),
+                ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _amenityChip(BuildContext context, IconData icon, String label) {
-    final cs = Theme.of(context).colorScheme;
-    return Chip(
-      avatar: Icon(icon, size: 16, color: cs.onSecondaryContainer),
-      label: Text(label),
-      backgroundColor: cs.secondaryContainer,
-      labelStyle: TextStyle(color: cs.onSecondaryContainer),
-    );
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Future<void> _launchPhone(String phone) async {
     final uri = Uri(scheme: 'tel', path: phone);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
-    }
-  }
-
-  Future<void> _launchWebsite(String url) async {
-    Uri uri;
-    try {
-      uri = Uri.parse(url);
-      // Add https if missing
-      if (!uri.hasScheme) {
-        uri = Uri.parse('https://$url');
-      }
-    } catch (_) {
-      return;
-    }
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
-  Future<void> _launchMaps(String query) async {
-    final encoded = Uri.encodeComponent(query);
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$encoded',
-    );
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 }

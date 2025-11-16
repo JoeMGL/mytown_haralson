@@ -63,7 +63,7 @@ class _EditClubPageState extends State<EditClubPage> {
     _meetingSchedule = c.meetingSchedule;
     _contactName = c.contactName;
     _contactEmail = c.contactEmail;
-    _contactPhone = c.contactPhone ?? '';
+    _contactPhone = c.contactPhone;
     _website = c.website;
     _facebook = c.facebook;
     _featured = c.featured;

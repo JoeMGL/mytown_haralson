@@ -17,14 +17,6 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
   String _city = 'All Cities';
   String _category = 'All';
 
-  static const _cities = [
-    'All Cities',
-    'Tallapoosa',
-    'Bremen',
-    'Buchanan',
-    'Waco',
-  ];
-
   static const _categories = [
     'All',
     'Civic / Service',
