@@ -8,7 +8,7 @@ import 'package:visit_haralson/models/stay.dart';
 
 // MODELS
 import 'models/place.dart';
-import 'models/eat_and_drink_model.dart';
+import 'models/eat_and_drink.dart';
 import 'models/clubs_model.dart';
 
 // SHELLS
@@ -20,8 +20,8 @@ import 'features/home/home_page.dart';
 import 'features/user/explore/explore_page.dart';
 import 'features/user/explore/explore_detail_page.dart';
 import 'features/user/events/events_page.dart';
-import 'features/eat_and_drink/eat_and_drink_page.dart';
-import 'features/eat_and_drink/eat_and_drink_details_page.dart';
+import 'features/user/eat_and_drink/eat_and_drink_page.dart';
+import 'features/user/eat_and_drink/eat_and_drink_details_page.dart';
 import 'features/user/stay/stay_page.dart';
 import 'features/user/shop/shop_page.dart';
 import 'features/user/shop/shop_detail_page.dart';
@@ -39,7 +39,9 @@ import 'models/shop.dart';
 import 'features/admin/dashboard_page.dart';
 import 'features/admin/add_attraction_page.dart';
 import 'features/admin/clubs/edit_club_page.dart';
-import 'features/admin/add_dining_page.dart';
+import 'features/admin/eat_and_drink/add_eat_and_drink_page.dart';
+import 'features/admin/eat_and_drink/admin_eat_and_drink_page.dart';
+import 'features/admin/eat_and_drink/edit_eat_and_drink_page.dart';
 import 'features/admin/lodging/admin_lodging_page.dart';
 import 'features/admin/lodging/add_lodging_page.dart';
 import 'features/admin/lodging/edit_lodging_page.dart';
@@ -116,7 +118,6 @@ final GoRouter appRouter = GoRouter(
             ),
           ),
           routes: [
-            // /eat/detail
             GoRoute(
               path: 'detail',
               name: 'eatDetail',
@@ -124,15 +125,7 @@ final GoRouter appRouter = GoRouter(
                 final eat = state.extra as EatAndDrink;
 
                 return EatAndDrinkDetailsPage(
-                  title: eat.name,
-                  imageUrl: eat.imageUrl,
-                  heroTag: eat.heroTag,
-                  description: eat.description,
-                  hours: eat.hours,
-                  tags: eat.tags,
-                  mapQuery: eat.mapQuery,
-                  phone: eat.phone,
-                  website: eat.website,
+                  place: eat, // ✔ NEW API
                 );
               },
             ),
@@ -237,13 +230,36 @@ final GoRouter appRouter = GoRouter(
           ),
         ),
         GoRoute(
-          path: 'dining',
+          path: 'eat',
           pageBuilder: (context, state) => const NoTransitionPage(
             child: AdminShell(
-              title: 'Dining',
-              child: AddEatAndDrinkPage(),
+              title: 'Eat',
+              child: AdminEatAndDrinkPage(),
             ),
           ),
+          routes: [
+            GoRoute(
+              path: 'add',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: AdminShell(
+                  title: 'Add Eat & Drink',
+                  child: AddEatAndDrinkPage(),
+                ),
+              ),
+            ),
+            GoRoute(
+              path: 'edit',
+              pageBuilder: (context, state) {
+                final place = state.extra as EatAndDrink;
+                return NoTransitionPage(
+                  child: AdminShell(
+                    title: 'Edit Eat & Drink',
+                    child: EditEatAndDrinkPage(place: place),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         GoRoute(
           path: 'shops',
