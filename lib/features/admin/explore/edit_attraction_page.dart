@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/place.dart';
 import '../../../widgets/location_selector.dart';
+import '../../../widgets/weekly_hours_field.dart';
 
 class EditAttractionPage extends StatefulWidget {
   const EditAttractionPage({
@@ -19,20 +20,31 @@ class EditAttractionPage extends StatefulWidget {
 class _EditAttractionPageState extends State<EditAttractionPage> {
   final _form = GlobalKey<FormState>();
 
+  // Core fields
   late String _name;
-  late String _city;
   late String _category;
   late String _coords;
   late bool _featured;
   late bool _active;
 
+  // Address
+  late String _street;
+  late String _city;
+  late String _state;
+  late String _zip;
+
+  // Detail fields
   late String _imageUrl;
   late String _heroTag;
   late String _description;
-  late String _hours;
+  late String _hours; // legacy free-text
   late String _tagsText;
   late String _mapQuery;
 
+  // Structured hours
+  Map<String, DayHours> _hoursByDay = {};
+
+  // Location
   String? _stateId;
   String? _stateName;
   String? _metroId;
@@ -41,8 +53,6 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
   String? _areaName;
 
   bool _saving = false;
-
-  static const _cities = ['Tallapoosa', 'Bremen', 'Buchanan', 'Waco'];
 
   static const _categories = [
     'Outdoor',
@@ -58,7 +68,13 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
     final p = widget.place;
 
     _name = p.title;
-    _city = _cities.contains(p.city) ? p.city : 'Tallapoosa';
+
+    // Address
+    _street = p.street;
+    _city = p.city;
+    _state = p.state;
+    _zip = p.zip;
+
     _category =
         _categories.contains(p.category) ? p.category : _categories.first;
 
@@ -81,6 +97,9 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
     _metroName = p.metroName;
     _areaId = p.areaId.isNotEmpty ? p.areaId : null;
     _areaName = p.areaName;
+
+    // Structured hours – copy existing; WeeklyHoursField will normalize days
+    _hoursByDay = Map<String, DayHours>.from(p.hoursByDay);
   }
 
   GeoPoint? _parseLatLng(String input) {
@@ -119,6 +138,10 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
           .toList();
 
       final title = _name.trim();
+      final street = _street.trim();
+      final city = _city.trim();
+      final state = _state.trim();
+      final zip = _zip.trim();
 
       await FirebaseFirestore.instance
           .collection('attractions')
@@ -126,12 +149,20 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
           .update({
         'name': title,
         'title': title,
-        'city': _city.trim(),
+
+        // Address
+        'street': street,
+        'city': city,
+        'state': state,
+        'zip': zip,
+
         'category': _category,
         'imageUrl': _imageUrl.trim(),
         'heroTag': _heroTag.trim().isEmpty ? title : _heroTag.trim(),
         'description': _description.trim(),
         'hours': _hours.trim().isEmpty ? null : _hours.trim(),
+        'hoursByDay':
+            _hoursByDay.map((key, value) => MapEntry(key, value.toMap())),
         'tags': tags,
         'mapQuery': _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
         'coords': geo,
@@ -145,8 +176,11 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
         'areaName': _areaName ?? '',
         'search': [
           title.toLowerCase(),
-          _city.toLowerCase(),
+          city.toLowerCase(),
           _category.toLowerCase(),
+          if (street.isNotEmpty) street.toLowerCase(),
+          if (state.isNotEmpty) state.toLowerCase(),
+          if (zip.isNotEmpty) zip.toLowerCase(),
         ],
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -167,8 +201,6 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Edit Attraction: ${widget.place.title}'),
@@ -180,6 +212,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Name
               TextFormField(
                 initialValue: _name,
                 decoration: const InputDecoration(labelText: 'Name / Title'),
@@ -189,6 +222,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 12),
 
+              // Image URL
               TextFormField(
                 initialValue: _imageUrl,
                 decoration: const InputDecoration(
@@ -199,6 +233,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 12),
 
+              // Hero tag
               TextFormField(
                 initialValue: _heroTag,
                 decoration: const InputDecoration(
@@ -210,6 +245,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 12),
 
+              // Description
               TextFormField(
                 initialValue: _description,
                 decoration: const InputDecoration(labelText: 'Description'),
@@ -220,16 +256,19 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 12),
 
-              TextFormField(
-                initialValue: _hours,
-                decoration: const InputDecoration(
-                  labelText: 'Hours (optional)',
-                  hintText: 'e.g. Mon–Sat 10am–6pm',
-                ),
-                onSaved: (v) => _hours = v?.trim() ?? '',
+              // Structured hours
+              WeeklyHoursField(
+                label: 'Hours by Day',
+                initialValue: _hoursByDay,
+                onChanged: (value) {
+                  setState(() {
+                    _hoursByDay = value;
+                  });
+                },
               ),
               const SizedBox(height: 12),
 
+              // Tags
               TextFormField(
                 initialValue: _tagsText,
                 decoration: const InputDecoration(
@@ -240,6 +279,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 12),
 
+              // Map query
               TextFormField(
                 initialValue: _mapQuery,
                 decoration: const InputDecoration(
@@ -251,16 +291,75 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 20),
 
-              DropdownButtonFormField<String>(
-                value: _city,
-                decoration: const InputDecoration(labelText: 'City'),
-                items: _cities
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _city = v ?? _city),
+              // Address section
+              Text(
+                'Address',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+
+              // Street
+              TextFormField(
+                initialValue: _street,
+                decoration: const InputDecoration(
+                  labelText: 'Street Address',
+                  hintText: 'e.g. 123 Main St',
+                ),
+                onSaved: (v) => _street = v?.trim() ?? '',
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 12),
 
+              // City
+              TextFormField(
+                initialValue: _city,
+                decoration: const InputDecoration(
+                  labelText: 'City',
+                  hintText: 'e.g. Tallapoosa',
+                ),
+                onSaved: (v) => _city = v?.trim() ?? '',
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+
+              // State + Zip
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      initialValue: _state,
+                      decoration: const InputDecoration(
+                        labelText: 'State',
+                        hintText: 'e.g. GA',
+                      ),
+                      onSaved: (v) => _state = v?.trim() ?? '',
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      initialValue: _zip,
+                      decoration: const InputDecoration(
+                        labelText: 'ZIP Code',
+                        hintText: 'e.g. 30176',
+                      ),
+                      keyboardType: TextInputType.number,
+                      onSaved: (v) => _zip = v?.trim() ?? '',
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Category
               DropdownButtonFormField<String>(
                 value: _category,
                 decoration: const InputDecoration(labelText: 'Category'),
@@ -271,22 +370,25 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 12),
 
-              // LOCATION
+              // LOCATION (state/metro/area)
               LocationSelector(
                 initialStateId: _stateId,
                 initialMetroId: _metroId,
                 initialAreaId: _areaId,
                 onChanged: (loc) {
-                  _stateId = loc.stateId;
-                  _stateName = loc.stateName;
-                  _metroId = loc.metroId;
-                  _metroName = loc.metroName;
-                  _areaId = loc.areaId;
-                  _areaName = loc.areaName;
+                  setState(() {
+                    _stateId = loc.stateId;
+                    _stateName = loc.stateName;
+                    _metroId = loc.metroId;
+                    _metroName = loc.metroName;
+                    _areaId = loc.areaId;
+                    _areaName = loc.areaName;
+                  });
                 },
               ),
               const SizedBox(height: 12),
 
+              // Coords
               TextFormField(
                 initialValue: _coords,
                 decoration: const InputDecoration(
@@ -297,6 +399,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 8),
 
+              // Flags
               SwitchListTile(
                 title: const Text('Featured'),
                 value: _featured,

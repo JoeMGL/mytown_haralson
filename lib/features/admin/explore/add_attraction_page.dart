@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/location_selector.dart';
+import '../../../widgets/weekly_hours_field.dart';
 import '../../../models/place.dart';
 
 class AddAttractionPage extends StatefulWidget {
@@ -16,19 +17,27 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
 
   // Core fields
   String _name = '';
-  String _city = 'Tallapoosa';
   String _category = 'Outdoor';
   String _coords = '';
   bool _featured = false;
   bool _saving = false;
 
+  // Address fields
+  String _street = '';
+  String _city = '';
+  String _state = '';
+  String _zip = '';
+
   // Detail fields
   String _imageUrl = '';
   String _heroTag = '';
   String _description = '';
-  String _hours = '';
+  String _hours = ''; // legacy free-text
   String _tagsText = '';
   String _mapQuery = '';
+
+  // Structured hours by day
+  Map<String, DayHours> _hoursByDay = {};
 
   // Location
   String? _stateId;
@@ -74,17 +83,25 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
           .toList();
 
       final title = _name.trim();
+      final street = _street.trim();
+      final city = _city.trim();
+      final state = _state.trim();
+      final zip = _zip.trim();
 
       final place = Place(
         id: '',
         name: title,
         title: title,
-        city: _city.trim(),
+        street: street,
+        city: city,
+        state: state,
+        zip: zip,
         category: _category,
         imageUrl: _imageUrl.trim(),
         heroTag: _heroTag.trim().isEmpty ? title : _heroTag.trim(),
         description: _description.trim(),
         hours: _hours.trim().isEmpty ? null : _hours.trim(),
+        hoursByDay: _hoursByDay,
         tags: tags,
         mapQuery: _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
         coords: geo,
@@ -92,8 +109,11 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
         active: true,
         search: [
           title.toLowerCase(),
-          _city.toLowerCase(),
+          city.toLowerCase(),
           _category.toLowerCase(),
+          if (street.isNotEmpty) street.toLowerCase(),
+          if (state.isNotEmpty) state.toLowerCase(),
+          if (zip.isNotEmpty) zip.toLowerCase(),
         ],
         stateId: _stateId ?? '',
         stateName: _stateName ?? '',
@@ -172,13 +192,15 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
             ),
             const SizedBox(height: 12),
 
-            // Hours
-            TextFormField(
-              decoration: const InputDecoration(
-                labelText: 'Hours (optional)',
-                hintText: 'e.g. Mon–Sat 10am–6pm',
-              ),
-              onSaved: (v) => _hours = v?.trim() ?? '',
+            // Structured weekly hours
+            WeeklyHoursField(
+              label: 'Hours by Day',
+              initialValue: _hoursByDay,
+              onChanged: (value) {
+                setState(() {
+                  _hoursByDay = value;
+                });
+              },
             ),
             const SizedBox(height: 12),
 
@@ -203,16 +225,69 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
             ),
             const SizedBox(height: 20),
 
-            // City
-            DropdownButtonFormField<String>(
-              value: _city,
-              decoration: const InputDecoration(labelText: 'City'),
-              items: const ['Tallapoosa', 'Bremen', 'Buchanan', 'Waco']
-                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                  .toList(),
-              onChanged: (v) => setState(() => _city = v ?? _city),
+            // Address section
+            Text(
+              'Address',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+
+            // Street
+            TextFormField(
+              decoration: const InputDecoration(
+                labelText: 'Street Address',
+                hintText: 'e.g. 123 Main St',
+              ),
+              onSaved: (v) => _street = v?.trim() ?? '',
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: 12),
+
+            // City
+            TextFormField(
+              decoration: const InputDecoration(
+                labelText: 'City',
+                hintText: 'e.g. Tallapoosa',
+              ),
+              onSaved: (v) => _city = v?.trim() ?? '',
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+
+            // State + Zip side by side
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    decoration: const InputDecoration(
+                      labelText: 'State',
+                      hintText: 'e.g. GA',
+                    ),
+                    onSaved: (v) => _state = v?.trim() ?? '',
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    decoration: const InputDecoration(
+                      labelText: 'ZIP Code',
+                      hintText: 'e.g. 30176',
+                    ),
+                    keyboardType: TextInputType.number,
+                    onSaved: (v) => _zip = v?.trim() ?? '',
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
 
             // Category
             DropdownButtonFormField<String>(
@@ -257,6 +332,7 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
             ),
             const SizedBox(height: 8),
 
+            // Featured flag
             SwitchListTile(
               title: const Text('Featured'),
               value: _featured,
