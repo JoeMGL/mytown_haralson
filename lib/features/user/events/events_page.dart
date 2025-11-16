@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../models/event.dart';
+import '../../../models/event.dart';
 import 'event_detail_page.dart';
 
 enum EventFilter { all, today, weekend, upcoming }

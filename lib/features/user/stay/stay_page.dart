@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../models/stay.dart';
+import '../../../models/stay.dart';
 
 /// Filters for lodging, mapped to the `type` field from AddLodgingPage
 enum LodgingFilter { hotel, cabin, campground, bnb, rental }

@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../models/stay.dart';
+import '../../../models/stay.dart';
 
 class StayDetailPage extends StatelessWidget {
   const StayDetailPage({super.key, required this.stay});

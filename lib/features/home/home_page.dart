@@ -138,6 +138,8 @@ class HomePage extends ConsumerWidget {
                           () => context.go('/events')),
                       _quick(context, Icons.group, 'Clubs',
                           () => context.goNamed('clubs')),
+                      _quick(context, Icons.store, 'Shop',
+                          () => context.goNamed('shop')),
                     ],
                   ),
                   const SizedBox(height: 16),

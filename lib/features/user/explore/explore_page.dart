@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../models/place.dart';
+import '../../../models/place.dart';
 
 /// Categories for Explore
 enum ExploreCategory { outdoor, museums, landmarks, family }

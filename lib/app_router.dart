@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:visit_haralson/features/admin/events/admin_events_page.dart';
 import 'package:visit_haralson/features/admin/locations/admin_location_setup_page.dart';
-import 'package:visit_haralson/features/stay/stay_detail_page.dart';
+import 'package:visit_haralson/features/admin/shop/admin_shop_page.dart';
+import 'package:visit_haralson/features/user/stay/stay_detail_page.dart';
 import 'package:visit_haralson/models/stay.dart';
 
 // MODELS
@@ -17,16 +18,30 @@ import 'features/admin/admin_shell.dart';
 
 // PUBLIC PAGES
 import 'features/home/home_page.dart';
-import 'features/explore/explore_page.dart';
-import 'features/explore/explore_detail_page.dart';
-import 'features/events/events_page.dart';
+import 'features/user/explore/explore_page.dart';
+import 'features/user/explore/explore_detail_page.dart';
+import 'features/user/events/events_page.dart';
 import 'features/eat_and_drink/eat_and_drink_page.dart';
 import 'features/eat_and_drink/eat_and_drink_details_page.dart';
-import 'features/stay/stay_page.dart';
+import 'features/user/stay/stay_page.dart';
+import 'features/user/shop/shop_page.dart';
+import 'features/user/shop/shop_detail_page.dart';
 
 // clubs
-import 'features/clubs/clubs_page.dart';
-import 'features/clubs/clubs_detail_page.dart';
+import 'features/user/clubs/clubs_page.dart';
+import 'features/user/clubs/clubs_detail_page.dart';
+
+// ADMIN PAGES
+// MODELS
+import 'models/place.dart';
+import 'models/eat_and_drink_model.dart';
+import 'models/clubs_model.dart';
+import 'models/shop.dart'; // 👈 ADD THIS
+import 'models/stay.dart'; // you can keep this here instead of top if you want
+
+// SHELLS
+import 'app_shell.dart';
+import 'features/admin/admin_shell.dart';
 
 // ADMIN PAGES
 import 'features/admin/dashboard_page.dart';
@@ -35,12 +50,14 @@ import 'features/admin/events/admin_add_event_page.dart';
 import 'features/admin/clubs/edit_club_page.dart';
 import 'features/admin/add_dining_page.dart';
 import 'features/admin/add_lodging_page.dart';
-import 'features/admin/add_shops_page.dart';
+import 'features/admin/shop/admin_shop_page.dart';
+import 'features/admin/shop/add_shops_page.dart';
+import 'features/admin/shop/admin_edit_shop_page.dart';
 import 'features/admin/users_and_roles_page.dart';
 import 'features/admin/add_announcement_page.dart';
 import 'features/admin/clubs/add_club_page.dart';
 import 'features/admin/clubs/admin_clubs_page.dart';
-import 'features/admin/config/global.dart'; // AdminSettingsPage
+import 'features/admin/config/global.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -175,6 +192,27 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+        // /shop
+        GoRoute(
+          path: 'shop',
+          name: 'shop',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AppShell(
+              title: 'Shop Local',
+              child: ShopPage(),
+            ),
+          ),
+          routes: [
+            GoRoute(
+              path: 'detail',
+              name: 'shopDetail',
+              builder: (context, state) {
+                final shop = state.extra as Shop;
+                return ShopDetailPage(shop: shop);
+              },
+            ),
+          ],
+        ),
       ],
     ),
 
@@ -220,9 +258,32 @@ final GoRouter appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: AdminShell(
               title: 'Shops',
-              child: AddShopsPage(),
+              child: AdminShopsPage(),
             ),
           ),
+          routes: [
+            GoRoute(
+              path: 'add',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: AdminShell(
+                  title: 'Add Shop / Business',
+                  child: AddShopPage(),
+                ),
+              ),
+            ),
+            GoRoute(
+              path: 'edit',
+              pageBuilder: (context, state) {
+                final shop = state.extra as Shop;
+                return NoTransitionPage(
+                  child: AdminShell(
+                    title: 'Edit Shop / Business',
+                    child: EditShopPage(shop: shop),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         GoRoute(
           path: 'lodging',
