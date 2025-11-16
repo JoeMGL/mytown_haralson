@@ -25,6 +25,14 @@ class Event {
   final List<String> tags;
   final List<String> search;
 
+  // 🔹 Location fields (mirroring Clubs)
+  final String stateId;
+  final String stateName;
+  final String metroId;
+  final String metroName;
+  final String areaId;
+  final String areaName;
+
   Event({
     required this.id,
     required this.title,
@@ -43,6 +51,12 @@ class Event {
     required this.imageUrl,
     required this.tags,
     required this.search,
+    this.stateId = '',
+    this.stateName = '',
+    this.metroId = '',
+    this.metroName = '',
+    this.areaId = '',
+    this.areaName = '',
   });
 
   /// Create from Firestore document
@@ -67,6 +81,14 @@ class Event {
       imageUrl: data['imageUrl'] as String?,
       tags: (data['tags'] as List?)?.cast<String>() ?? const [],
       search: (data['search'] as List?)?.cast<String>() ?? const [],
+
+      // 🔹 Location (safe defaults for old docs)
+      stateId: (data['stateId'] ?? '') as String,
+      stateName: (data['stateName'] ?? '') as String,
+      metroId: (data['metroId'] ?? '') as String,
+      metroName: (data['metroName'] ?? '') as String,
+      areaId: (data['areaId'] ?? '') as String,
+      areaName: (data['areaName'] ?? '') as String,
     );
   }
 
@@ -89,6 +111,14 @@ class Event {
       'imageUrl': imageUrl,
       'tags': tags,
       'search': search,
+
+      // 🔹 Location
+      'stateId': stateId,
+      'stateName': stateName,
+      'metroId': metroId,
+      'metroName': metroName,
+      'areaId': areaId,
+      'areaName': areaName,
     };
   }
 

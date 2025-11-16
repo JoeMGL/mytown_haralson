@@ -1,7 +1,9 @@
+// lib/features/admin/events/admin_add_event_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/event.dart';
+import '../../../widgets/location_selector.dart';
 
 class AddEventPage extends StatefulWidget {
   const AddEventPage({super.key});
@@ -13,7 +15,7 @@ class _AddEventPageState extends State<AddEventPage> {
   final _form = GlobalKey<FormState>();
 
   String _title = '';
-  String _city = 'Tallapoosa';
+  String _city = '';
   String _category = 'Festival';
   String _venue = '';
   String _address = '';
@@ -30,7 +32,14 @@ class _AddEventPageState extends State<AddEventPage> {
 
   bool _saving = false;
 
-  static const _cities = ['Tallapoosa', 'Bremen', 'Buchanan', 'Waco'];
+  // Location fields (state / metro / area)
+  String? _stateId;
+  String? _stateName;
+  String? _metroId;
+  String? _metroName;
+  String? _areaId;
+  String? _areaName;
+
   static const _categories = [
     'Festival',
     'Music',
@@ -46,205 +55,232 @@ class _AddEventPageState extends State<AddEventPage> {
 
   @override
   Widget build(BuildContext context) {
-    // AdminShell wraps this, so no Scaffold here
     final ml = MaterialLocalizations.of(context);
 
-    return Material(
-      // 👈 add this wrapper
-      color: Theme.of(context).colorScheme.surface,
-      child: Form(
-        key: _form,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text('Add Event', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 16),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Add Event'),
+      ),
+      body: AbsorbPointer(
+        absorbing: _saving,
+        child: Form(
+          key: _form,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // --- BASIC INFO ---
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'Title'),
+                onSaved: (v) => _title = v?.trim() ?? '',
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
 
-            // Title
-            TextFormField(
-              decoration: const InputDecoration(labelText: 'Title'),
-              onSaved: (v) => _title = v?.trim() ?? '',
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: 12),
+              // City (free text instead of dropdown)
+              TextFormField(
+                initialValue: _city,
+                decoration: const InputDecoration(labelText: 'City'),
+                onSaved: (v) => _city = v?.trim() ?? '',
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
 
-            // City
-            DropdownButtonFormField<String>(
-              value: _city,
-              decoration: const InputDecoration(labelText: 'City'),
-              items: _cities
-                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                  .toList(),
-              onChanged: (v) => setState(() => _city = v ?? _city),
-            ),
-            const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _category,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: _categories
+                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                    .toList(),
+                onChanged: (v) => setState(() => _category = v ?? _category),
+              ),
+              const SizedBox(height: 16),
 
-            // Category
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items: _categories
-                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                  .toList(),
-              onChanged: (v) => setState(() => _category = v ?? _category),
-            ),
-            const SizedBox(height: 12),
+              // --- LOCATION SELECTOR (STATE / METRO / AREA) ---
+              LocationSelector(
+                initialStateId: _stateId,
+                initialMetroId: _metroId,
+                initialAreaId: _areaId,
+                onChanged: (loc) {
+                  setState(() {
+                    _stateId = loc.stateId;
+                    _stateName = loc.stateName;
+                    _metroId = loc.metroId;
+                    _metroName = loc.metroName;
+                    _areaId = loc.areaId;
+                    _areaName = loc.areaName;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
 
-            // Venue
-            TextFormField(
-              decoration: const InputDecoration(labelText: 'Venue'),
-              onSaved: (v) => _venue = v?.trim() ?? '',
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: 12),
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'Venue'),
+                onSaved: (v) => _venue = v?.trim() ?? '',
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
 
-            // Address
-            TextFormField(
-              decoration: const InputDecoration(labelText: 'Address'),
-              onSaved: (v) => _address = v?.trim() ?? '',
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: 12),
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'Address'),
+                onSaved: (v) => _address = v?.trim() ?? '',
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
 
-            // Description
-            TextFormField(
-              decoration: const InputDecoration(labelText: 'Short Description'),
-              maxLines: 3,
-              onSaved: (v) => _description = v?.trim() ?? '',
-            ),
-            const SizedBox(height: 12),
+              TextFormField(
+                decoration:
+                    const InputDecoration(labelText: 'Short Description'),
+                maxLines: 3,
+                onSaved: (v) => _description = v?.trim() ?? '',
+              ),
+              const SizedBox(height: 12),
 
-            // External link (optional)
-            TextFormField(
-              decoration:
-                  const InputDecoration(labelText: 'External Link (optional)'),
-              keyboardType: TextInputType.url,
-              onSaved: (v) => _externalLink = v?.trim() ?? '',
-            ),
-            const SizedBox(height: 12),
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'External Link (optional)',
+                  hintText: 'https://example.com',
+                ),
+                keyboardType: TextInputType.url,
+                onSaved: (v) => _externalLink = v?.trim() ?? '',
+              ),
+              const SizedBox(height: 16),
 
-            // All-day
-            SwitchListTile(
-              value: _allDay,
-              onChanged: (v) {
-                setState(() {
-                  _allDay = v;
-                  if (v) {
-                    _start =
-                        DateTime(_start.year, _start.month, _start.day, 0, 0);
-                    _end =
-                        DateTime(_start.year, _start.month, _start.day, 23, 59);
-                  }
-                });
-              },
-              title: const Text('All-day'),
-            ),
-            const SizedBox(height: 8),
+              // --- TIME ---
+              SwitchListTile(
+                value: _allDay,
+                onChanged: (v) {
+                  setState(() {
+                    _allDay = v;
+                    if (v) {
+                      _start = DateTime(
+                        _start.year,
+                        _start.month,
+                        _start.day,
+                        0,
+                        0,
+                      );
+                      _end = DateTime(
+                        _start.year,
+                        _start.month,
+                        _start.day,
+                        23,
+                        59,
+                      );
+                    }
+                  });
+                },
+                title: const Text('All-day'),
+              ),
+              const SizedBox(height: 8),
 
-            // Start / End
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: _pickStart,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Starts'),
-                      child: Text(
-                        _allDay
-                            ? ml.formatFullDate(_start)
-                            : '${ml.formatFullDate(_start)} • ${TimeOfDay.fromDateTime(_start).format(context)}',
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: _pickStart,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Starts'),
+                        child: Text(
+                          _allDay
+                              ? ml.formatFullDate(_start)
+                              : '${ml.formatFullDate(_start)} • '
+                                  '${TimeOfDay.fromDateTime(_start).format(context)}',
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: InkWell(
-                    onTap: _pickEnd,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Ends'),
-                      child: Text(
-                        _allDay
-                            ? ml.formatFullDate(_end)
-                            : '${ml.formatFullDate(_end)} • ${TimeOfDay.fromDateTime(_end).format(context)}',
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      onTap: _pickEnd,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Ends'),
+                        child: Text(
+                          _allDay
+                              ? ml.formatFullDate(_end)
+                              : '${ml.formatFullDate(_end)} • '
+                                  '${TimeOfDay.fromDateTime(_end).format(context)}',
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-            // Free / Price
-            Row(
-              children: [
-                Expanded(
-                  child: SwitchListTile(
-                    value: _free,
-                    onChanged: (v) => setState(() {
-                      _free = v;
-                      if (v) _price = 0;
-                    }),
-                    title: const Text('Free'),
-                    contentPadding: EdgeInsets.zero,
+              // --- PRICE ---
+              Row(
+                children: [
+                  Expanded(
+                    child: SwitchListTile(
+                      value: _free,
+                      onChanged: (v) => setState(() {
+                        _free = v;
+                        if (v) _price = 0;
+                      }),
+                      title: const Text('Free'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    enabled: !_free,
-                    decoration: const InputDecoration(labelText: 'Price (USD)'),
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    validator: (v) {
-                      if (_free) return null;
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Enter a price or mark Free';
-                      }
-                      final parsed = double.tryParse(v);
-                      if (parsed == null || parsed < 0) {
-                        return 'Enter a valid price';
-                      }
-                      return null;
-                    },
-                    onSaved: (v) {
-                      if (_free) {
-                        _price = 0;
-                      } else {
-                        _price = double.tryParse(v ?? '0') ?? 0;
-                      }
-                    },
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      enabled: !_free,
+                      decoration:
+                          const InputDecoration(labelText: 'Price (USD)'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: (v) {
+                        if (_free) return null;
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Enter a price or mark Free';
+                        }
+                        final parsed = double.tryParse(v);
+                        if (parsed == null || parsed < 0) {
+                          return 'Enter a valid price';
+                        }
+                        return null;
+                      },
+                      onSaved: (v) {
+                        if (_free) {
+                          _price = 0;
+                        } else {
+                          _price = double.tryParse(v ?? '0') ?? 0;
+                        }
+                      },
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-            // Featured
-            SwitchListTile(
-              value: _featured,
-              onChanged: (v) => setState(() => _featured = v),
-              title: const Text('Featured'),
-            ),
-            const SizedBox(height: 12),
+              // --- FLAGS ---
+              SwitchListTile(
+                value: _featured,
+                onChanged: (v) => setState(() => _featured = v),
+                title: const Text('Featured'),
+              ),
+              const SizedBox(height: 24),
 
-            // Save
-            FilledButton.icon(
-              onPressed: _saving ? null : _submit,
-              icon: _saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save),
-              label: Text(_saving ? 'Saving...' : 'Save'),
-            ),
-          ],
+              // --- SAVE BUTTON ---
+              FilledButton.icon(
+                onPressed: _saving ? null : _submit,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save),
+                label: Text(_saving ? 'Saving...' : 'Save'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -253,6 +289,16 @@ class _AddEventPageState extends State<AddEventPage> {
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
     _form.currentState!.save();
+
+    // Require state + metro like Clubs
+    if (_stateId == null || _metroId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a state and metro for this event.'),
+        ),
+      );
+      return;
+    }
 
     // Ensure end is after start
     if (!_end.isAfter(_start)) {
@@ -288,6 +334,13 @@ class _AddEventPageState extends State<AddEventPage> {
 
       await FirebaseFirestore.instance.collection('events').add({
         ...event.toMap(),
+        // Location
+        'stateId': _stateId,
+        'stateName': _stateName ?? '',
+        'metroId': _metroId,
+        'metroName': _metroName ?? '',
+        'areaId': _areaId,
+        'areaName': _areaName ?? '',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
