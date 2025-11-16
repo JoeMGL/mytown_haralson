@@ -40,8 +40,7 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
           }
           if (snapshot.hasError) {
             return Center(
-              child:
-                  Text('Error loading attractions: ${snapshot.error}'),
+              child: Text('Error loading attractions: ${snapshot.error}'),
             );
           }
 
@@ -52,8 +51,7 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
             );
           }
 
-          final allPlaces =
-              docs.map((d) => Place.fromFirestore(d)).toList();
+          final allPlaces = docs.map((d) => Place.fromFirestore(d)).toList();
 
           // Build label maps
           final Map<String, String> stateLabels = {};
@@ -249,8 +247,7 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('${place.city} • ${place.category}'),
-                          if (place.hours != null &&
-                              place.hours!.isNotEmpty)
+                          if (place.hours != null && place.hours!.isNotEmpty)
                             Text(
                               place.hours!,
                               style: const TextStyle(fontSize: 12),
@@ -260,12 +257,9 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
                               place.areaName.isNotEmpty)
                             Text(
                               [
-                                if (place.stateName.isNotEmpty)
-                                  place.stateName,
-                                if (place.metroName.isNotEmpty)
-                                  place.metroName,
-                                if (place.areaName.isNotEmpty)
-                                  place.areaName,
+                                if (place.stateName.isNotEmpty) place.stateName,
+                                if (place.metroName.isNotEmpty) place.metroName,
+                                if (place.areaName.isNotEmpty) place.areaName,
                               ].join(' • '),
                               style: const TextStyle(fontSize: 11),
                             ),
@@ -281,8 +275,7 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
                               await FirebaseFirestore.instance
                                   .collection('attractions')
                                   .doc(place.id)
-                                  .update(
-                                      {'featured': !place.featured});
+                                  .update({'featured': !place.featured});
                             },
                             borderRadius: BorderRadius.circular(16),
                             child: Container(
@@ -343,8 +336,7 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) =>
-                                EditAttractionPage(place: place),
+                            builder: (_) => EditAttractionPage(place: place),
                           ),
                         );
                       },
@@ -360,7 +352,7 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
         onPressed: () {
           // If you have /admin/attractions/add route, you can use GoRouter here
           // For now, assume AddAttractionPage is wired in the router
-          context.push('/admin/attractions');
+          context.push('/admin/attractions/add');
         },
         icon: const Icon(Icons.add),
         label: const Text('Add Attraction'),

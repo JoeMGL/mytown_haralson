@@ -37,7 +37,9 @@ import 'models/shop.dart';
 
 // ADMIN PAGES
 import 'features/admin/dashboard_page.dart';
+import 'features/admin/explore/admin_explore_page.dart';
 import 'features/admin/explore/add_attraction_page.dart';
+import 'features/admin/explore/edit_attraction_page.dart';
 import 'features/admin/clubs/edit_club_page.dart';
 import 'features/admin/eat_and_drink/add_eat_and_drink_page.dart';
 import 'features/admin/eat_and_drink/admin_eat_and_drink_page.dart';
@@ -51,6 +53,7 @@ import 'features/admin/users_and_roles_page.dart';
 import 'features/admin/add_announcement_page.dart';
 import 'features/admin/clubs/add_club_page.dart';
 import 'features/admin/clubs/admin_clubs_page.dart';
+import 'features/admin/categories/admin_categories_page.dart';
 import 'features/admin/config/global.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -207,9 +210,49 @@ final GoRouter appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: AdminShell(
               title: 'Attractions',
-              child: AddAttractionPage(),
+              child: AdminExplorePage(),
             ),
           ),
+          routes: [
+            // /admin/attractions/add
+            GoRoute(
+              path: 'add',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: AdminShell(
+                  title: 'Add Attraction',
+                  child: AddAttractionPage(),
+                ),
+              ),
+            ),
+
+            // /admin/attractions/edit
+            // use .goNamed('adminEditAttraction', extra: place)
+            GoRoute(
+              path: 'edit',
+              name: 'adminEditAttraction',
+              pageBuilder: (context, state) {
+                final place = state.extra as Place;
+
+                return NoTransitionPage(
+                  child: AdminShell(
+                    title: 'Edit Attraction',
+                    child: EditAttractionPage(place: place),
+                  ),
+                );
+              },
+            ),
+
+            // /admin/attractions/categories  (optional, but handy)
+            GoRoute(
+              path: 'categories',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: AdminShell(
+                  title: 'Attraction Categories',
+                  child: AdminCategoriesPage(),
+                ),
+              ),
+            ),
+          ],
         ),
         GoRoute(
           path: 'events',
@@ -362,6 +405,15 @@ final GoRouter appRouter = GoRouter(
             child: AdminShell(
               title: 'Locations',
               child: AdminLocationSetupPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: 'categories',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AdminShell(
+              title: 'Categories',
+              child: AdminCategoriesPage(),
             ),
           ),
         ),

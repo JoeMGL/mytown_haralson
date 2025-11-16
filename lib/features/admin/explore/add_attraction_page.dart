@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../widgets/location_selector.dart';
 import '../../../widgets/weekly_hours_field.dart';
 import '../../../models/place.dart';
+import '../../../models/category.dart';
 
 class AddAttractionPage extends StatefulWidget {
   const AddAttractionPage({super.key});
@@ -17,7 +18,6 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
 
   // Core fields
   String _name = '';
-  String _category = 'Outdoor';
   String _coords = '';
   bool _featured = false;
   bool _saving = false;
@@ -32,12 +32,17 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
   String _imageUrl = '';
   String _heroTag = '';
   String _description = '';
-  String _hours = ''; // legacy free-text
   String _tagsText = '';
   String _mapQuery = '';
 
   // Structured hours by day
   Map<String, DayHours> _hoursByDay = {};
+
+  // Categories
+  List<Category> _categories = [];
+  Set<String> _selectedCategorySlugs = {};
+  bool _loadingCategories = true;
+  String? _categoriesError;
 
   // Location
   String? _stateId;
@@ -46,6 +51,94 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
   String? _metroName;
   String? _areaId;
   String? _areaName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('categories')
+          .where('section', isEqualTo: 'attractions')
+          .orderBy('sortOrder')
+          .get();
+
+      final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      setState(() {
+        _categories = cats;
+        _categoriesError = null;
+        _loadingCategories = false;
+
+        if (_categories.isNotEmpty && _selectedCategorySlugs.isEmpty) {
+          _selectedCategorySlugs = {_categories.first.slug};
+        }
+      });
+    } catch (e, st) {
+      debugPrint('Error loading categories in AddAttractionPage: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _loadingCategories = false;
+        _categoriesError = e.toString();
+        _categories = [];
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading categories: $e')),
+      );
+    }
+  }
+
+  Widget _buildCategoryMultiSelect(BuildContext context) {
+    if (_loadingCategories) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_categoriesError != null) {
+      return Text(
+        'Error loading categories: $_categoriesError',
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      );
+    }
+
+    if (_categories.isEmpty) {
+      return const Text(
+        'No categories configured for attractions.\n'
+        'Add some in the Admin → Categories page with section "attractions".',
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Categories'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: _categories.map((cat) {
+            final selected = _selectedCategorySlugs.contains(cat.slug);
+            return FilterChip(
+              label: Text(cat.name),
+              selected: selected,
+              onSelected: (value) {
+                setState(() {
+                  if (value) {
+                    _selectedCategorySlugs.add(cat.slug);
+                  } else {
+                    _selectedCategorySlugs.remove(cat.slug);
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
 
   GeoPoint? _parseLatLng(String input) {
     final t = input.trim();
@@ -71,6 +164,15 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
       return;
     }
 
+    if (_selectedCategorySlugs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one category.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
 
     try {
@@ -88,6 +190,9 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
       final state = _state.trim();
       final zip = _zip.trim();
 
+      final categorySlugs = _selectedCategorySlugs.toList();
+      final primaryCategory = categorySlugs.first;
+
       final place = Place(
         id: '',
         name: title,
@@ -96,11 +201,11 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
         city: city,
         state: state,
         zip: zip,
-        category: _category,
+        category: primaryCategory,
+        categories: categorySlugs,
         imageUrl: _imageUrl.trim(),
         heroTag: _heroTag.trim().isEmpty ? title : _heroTag.trim(),
         description: _description.trim(),
-        hours: _hours.trim().isEmpty ? null : _hours.trim(),
         hoursByDay: _hoursByDay,
         tags: tags,
         mapQuery: _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
@@ -110,7 +215,8 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
         search: [
           title.toLowerCase(),
           city.toLowerCase(),
-          _category.toLowerCase(),
+          primaryCategory.toLowerCase(),
+          ...categorySlugs.map((c) => c.toLowerCase()),
           if (street.isNotEmpty) street.toLowerCase(),
           if (state.isNotEmpty) state.toLowerCase(),
           if (zip.isNotEmpty) zip.toLowerCase(),
@@ -289,19 +395,8 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
             ),
             const SizedBox(height: 20),
 
-            // Category
-            DropdownButtonFormField<String>(
-              value: _category,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items: const [
-                'Outdoor',
-                'History',
-                'Shopping',
-                'Dining',
-                'Lodging',
-              ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-              onChanged: (v) => setState(() => _category = v ?? _category),
-            ),
+            // Category multi-select
+            _buildCategoryMultiSelect(context),
             const SizedBox(height: 12),
 
             // Location selector (state/metro/area)

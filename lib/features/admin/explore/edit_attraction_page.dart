@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/place.dart';
+import '../../../models/category.dart'; // 👈 NEW
 import '../../../widgets/location_selector.dart';
 import '../../../widgets/weekly_hours_field.dart';
 
@@ -22,10 +23,15 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
 
   // Core fields
   late String _name;
-  late String _category;
   late String _coords;
   late bool _featured;
   late bool _active;
+
+  // Category (dynamic)
+  String? _categorySlug; // e.g. "outdoor", "history"
+  List<Category> _categories = [];
+  bool _loadingCategories = true;
+  String? _categoriesError;
 
   // Address
   late String _street;
@@ -54,14 +60,6 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
 
   bool _saving = false;
 
-  static const _categories = [
-    'Outdoor',
-    'History',
-    'Shopping',
-    'Dining',
-    'Lodging',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -75,8 +73,8 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
     _state = p.state;
     _zip = p.zip;
 
-    _category =
-        _categories.contains(p.category) ? p.category : _categories.first;
+    // Category slug stored on Place (from AddAttractionPage)
+    _categorySlug = p.category; // e.g. "outdoor", "history"
 
     _imageUrl = p.imageUrl;
     _heroTag = p.heroTag;
@@ -100,6 +98,92 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
 
     // Structured hours – copy existing; WeeklyHoursField will normalize days
     _hoursByDay = Map<String, DayHours>.from(p.hoursByDay);
+
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('categories')
+          .where('section', isEqualTo: 'attractions')
+          .orderBy('sortOrder')
+          .get();
+
+      final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      setState(() {
+        _categories = cats;
+        _categoriesError = null;
+        _loadingCategories = false;
+
+        // If no slug yet but we have categories, default to the first
+        if (_categorySlug == null && _categories.isNotEmpty) {
+          _categorySlug = _categories.first.slug;
+        }
+      });
+    } catch (e, st) {
+      debugPrint('Error loading categories in EditAttractionPage: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _loadingCategories = false;
+        _categoriesError = e.toString();
+        _categories = [];
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading categories: $e')),
+      );
+    }
+  }
+
+  Widget _buildCategoryField(BuildContext context) {
+    if (_loadingCategories) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_categoriesError != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Error loading categories:',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: Theme.of(context).colorScheme.error),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _categoriesError!,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      );
+    }
+
+    if (_categories.isEmpty) {
+      return const Text(
+        'No categories configured for attractions.\n'
+        'Add some in the Admin → Categories page with section "attractions".',
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      value: _categorySlug,
+      decoration: const InputDecoration(labelText: 'Category'),
+      items: _categories
+          .map(
+            (c) => DropdownMenuItem(
+              value: c.slug,
+              child: Text(c.name),
+            ),
+          )
+          .toList(),
+      onChanged: (v) => setState(() => _categorySlug = v),
+      validator: (v) =>
+          (v == null || v.isEmpty) ? 'Please select a category' : null,
+    );
   }
 
   GeoPoint? _parseLatLng(String input) {
@@ -126,6 +210,15 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
       return;
     }
 
+    if (_categorySlug == null || _categorySlug!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a category.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
 
     try {
@@ -142,6 +235,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
       final city = _city.trim();
       final state = _state.trim();
       final zip = _zip.trim();
+      final categorySlug = _categorySlug!.trim();
 
       await FirebaseFirestore.instance
           .collection('attractions')
@@ -156,7 +250,9 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
         'state': state,
         'zip': zip,
 
-        'category': _category,
+        // Category stored as slug
+        'category': categorySlug,
+
         'imageUrl': _imageUrl.trim(),
         'heroTag': _heroTag.trim().isEmpty ? title : _heroTag.trim(),
         'description': _description.trim(),
@@ -177,7 +273,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
         'search': [
           title.toLowerCase(),
           city.toLowerCase(),
-          _category.toLowerCase(),
+          categorySlug.toLowerCase(),
           if (street.isNotEmpty) street.toLowerCase(),
           if (state.isNotEmpty) state.toLowerCase(),
           if (zip.isNotEmpty) zip.toLowerCase(),
@@ -359,15 +455,8 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 20),
 
-              // Category
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v ?? _category),
-              ),
+              // Category (dynamic)
+              _buildCategoryField(context),
               const SizedBox(height: 12),
 
               // LOCATION (state/metro/area)
