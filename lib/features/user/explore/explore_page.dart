@@ -1,9 +1,10 @@
-// explore_page.dart
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../models/place.dart';
+import '/core/location/location_provider.dart';
 
 /// Categories for Explore
 enum ExploreCategory { outdoor, museums, landmarks, family }
@@ -15,285 +16,239 @@ const categoryLabels = {
   ExploreCategory.family: 'Family',
 };
 
-class ExplorePage extends StatefulWidget {
+class ExplorePage extends ConsumerStatefulWidget {
   const ExplorePage({super.key});
+
   @override
-  State<ExplorePage> createState() => _ExplorePageState();
+  ConsumerState<ExplorePage> createState() => _ExplorePageState();
 }
 
-class _ExplorePageState extends State<ExplorePage> {
-  ExploreCategory cat = ExploreCategory.outdoor;
+class _ExplorePageState extends ConsumerState<ExplorePage> {
+  ExploreCategory _cat = ExploreCategory.outdoor;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final locationAsync = ref.watch(locationProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Explore')),
-      body: Column(
-        children: [
-          // Category chips
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: ExploreCategory.values.map((c) {
-                  final selected = c == cat;
+    return locationAsync.when(
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, _) => Scaffold(
+        body: Center(child: Text('Error loading location: $e')),
+      ),
+      data: (loc) {
+        final stateId = loc.stateId;
+        final metroId = loc.metroId;
 
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(
-                        categoryLabels[c]!,
-                        style: TextStyle(
-                          color: selected ? cs.onPrimary : cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      selected: selected,
-                      showCheckmark: false,
-                      checkmarkColor: Colors.transparent,
-                      selectedColor: cs.primary,
-                      backgroundColor: cs.surfaceContainerHighest,
-                      side: BorderSide(color: cs.outlineVariant),
-                      labelPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      onSelected: (_) => setState(() => cat = c),
-                    ),
-                  );
-                }).toList(),
+        if (stateId == null || metroId == null) {
+          return const Scaffold(
+            body: Center(
+              child: Text(
+                'Select a state and metro in Settings to see attractions.',
               ),
             ),
-          ),
+          );
+        }
 
-          const SizedBox(height: 4),
+        return Scaffold(
+          appBar: AppBar(title: const Text('Explore')),
+          body: Column(
+            children: [
+              // Category chips
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Wrap(
+                  spacing: 8,
+                  children: ExploreCategory.values.map((c) {
+                    final selected = _cat == c;
+                    return ChoiceChip(
+                      label: Text(categoryLabels[c] ?? c.name),
+                      selected: selected,
+                      onSelected: (_) {
+                        setState(() => _cat = c);
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              const Divider(height: 1),
 
-          // Firestore list
-          Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('attractions')
-                  .orderBy('createdAt', descending: false)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Error loading attractions: ${snapshot.error}'),
-                  );
-                }
+              Expanded(
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('attractions')
+                      .where('stateId', isEqualTo: stateId)
+                      .where('metroId', isEqualTo: metroId)
+                      .orderBy('name')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Error loading attractions: ${snapshot.error}',
+                        ),
+                      );
+                    }
 
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                    final docs = snapshot.data?.docs ?? [];
+                    if (docs.isEmpty) {
+                      return const Center(
+                        child: Text('No attractions yet in this metro.'),
+                      );
+                    }
 
-                final docs = snapshot.data?.docs ?? [];
+                    var places = docs
+                        .map((d) => Place.fromFirestore(d))
+                        .where((p) => p.active)
+                        .toList();
 
-                // Apply simple category filter based on the string "category"
-                final filtered = docs.where((doc) {
-                  final data = doc.data();
-                  return _matchesCategory(data, cat);
-                }).toList();
+                    // Filter by our categories
+                    places = places.where((p) {
+                      switch (_cat) {
+                        case ExploreCategory.outdoor:
+                          return p.category == 'Outdoor';
+                        case ExploreCategory.museums:
+                          return p.category == 'History' ||
+                              p.category == 'Museum';
+                        case ExploreCategory.landmarks:
+                          return p.category == 'Landmarks' ||
+                              p.category == 'Shopping';
+                        case ExploreCategory.family:
+                          return p.tags
+                              .map((t) => t.toLowerCase())
+                              .contains('family-friendly');
+                      }
+                    }).toList();
 
-                if (filtered.isEmpty) {
-                  return const Center(
-                    child: Text('No attractions found yet.'),
-                  );
-                }
+                    if (places.isEmpty) {
+                      return const Center(
+                        child: Text('No places match this filter.'),
+                      );
+                    }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final doc = filtered[index];
-                    final data = doc.data();
+                    return ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: places.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final place = places[index];
+                        final heroTag = place.heroTag.isNotEmpty
+                            ? place.heroTag
+                            : 'place_${place.id}';
 
-                    final title =
-                        (data['title'] ?? data['name'] ?? 'Attraction')
-                            .toString();
-                    final imageUrl = (data['imageUrl'] ?? '').toString().trim();
-                    final heroTag =
-                        (data['heroTag'] ?? title).toString().trim();
-
-                    final city = (data['city'] ?? '').toString().trim();
-                    final category = (data['category'] ?? '').toString().trim();
-
-                    // Use City • Category as subtitle if available
-                    final subtitleParts = <String>[];
-                    if (city.isNotEmpty) subtitleParts.add(city);
-                    if (category.isNotEmpty) subtitleParts.add(category);
-                    final subtitle =
-                        subtitleParts.isEmpty ? '' : subtitleParts.join(' • ');
-
-                    final description =
-                        (data['description'] ?? '').toString().trim();
-                    final hours = (data['hours'] as String?)?.trim();
-
-                    final tags = (data['tags'] as List<dynamic>?)
-                            ?.map((e) => e.toString())
-                            .where((e) => e.isNotEmpty)
-                            .toList() ??
-                        const <String>[];
-
-                    final mapQuery = (data['mapQuery'] as String?)?.trim();
-
-                    return _placeCard(
-                      photo: imageUrl,
-                      heroTag: heroTag,
-                      title: title,
-                      subtitle: subtitle,
-                      description: description,
-                      tags: tags,
-                      hours: hours,
-                      mapQuery: mapQuery,
+                        return Card(
+                          clipBehavior: Clip.antiAlias,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: InkWell(
+                            onTap: () {
+                              context.pushNamed(
+                                'exploreDetail',
+                                extra: place,
+                              );
+                            },
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width: 120,
+                                  height: 120,
+                                  child: Hero(
+                                    tag: heroTag,
+                                    child: place.imageUrl.isNotEmpty
+                                        ? Image.network(
+                                            place.imageUrl,
+                                            fit: BoxFit.cover,
+                                          )
+                                        : Container(
+                                            color: cs.surfaceContainerHighest,
+                                            child: Icon(
+                                              Icons.landscape,
+                                              size: 40,
+                                              color: cs.onSurfaceVariant,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                place.title,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                              ),
+                                            ),
+                                            if (place.featured)
+                                              Icon(
+                                                Icons.star,
+                                                size: 18,
+                                                color: cs.primary,
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          [
+                                            if (place.category.isNotEmpty)
+                                              place.category,
+                                            if (place.city.isNotEmpty)
+                                              place.city,
+                                          ].join(' • '),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                        if (place.description.isNotEmpty)
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 6.0),
+                                            child: Text(
+                                              place.description,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-
-  /// Simple mapping of Firestore "category" string to ExploreCategory.
-  /// You can tweak this however you like.
-  bool _matchesCategory(
-    Map<String, dynamic> data,
-    ExploreCategory selected,
-  ) {
-    final catStr = (data['category'] ?? '').toString().toLowerCase();
-    final tags = (data['tags'] as List<dynamic>?)
-            ?.map((e) => e.toString().toLowerCase())
-            .toList() ??
-        const <String>[];
-
-    switch (selected) {
-      case ExploreCategory.outdoor:
-        // Matches your AddAttraction "Outdoor" category
-        return catStr == 'outdoor';
-      case ExploreCategory.museums:
-        return catStr == 'history' || catStr == 'museum' || catStr == 'museums';
-      case ExploreCategory.landmarks:
-        return catStr == 'shopping' ||
-            catStr == 'landmark' ||
-            catStr == 'landmarks';
-      case ExploreCategory.family:
-        // Either explicitly tagged, or just show everything as a catch-all
-        if (tags.any((t) => t.contains('family'))) return true;
-        return true; // loosen this if you want a stricter filter
-    }
-  }
-
-  /// A single place row card built from Firestore data.
-  Widget _placeCard({
-    required String photo,
-    required String heroTag,
-    required String title,
-    required String subtitle,
-    required String description,
-    required List<String> tags,
-    String? hours,
-    String? mapQuery,
-  }) {
-    // Fallback image if none set
-    final effectivePhoto = (photo.isEmpty)
-        ? 'https://images.unsplash.com/photo-1470770903676-69b98201ea1c?q=80&w=800'
-        : photo;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: ListTile(
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Hero(
-            tag: heroTag,
-            child: _netThumb(effectivePhoto),
-          ),
-        ),
-        title: Text(title),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (subtitle.isNotEmpty) Text(subtitle),
-            if (hours != null && hours.isNotEmpty)
-              Text(hours, style: const TextStyle(fontSize: 12)),
-          ],
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          context.push(
-            '/explore/detail',
-            extra: Place(
-              title: title,
-              imageUrl: effectivePhoto,
-              heroTag: heroTag,
-              description: description,
-              hours: hours,
-              tags: tags,
-              mapQuery: mapQuery,
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// 56x56 network thumb with fallbacks (JPEG-safe Unsplash).
-  Widget _netThumb(String url) {
-    const uiW = 56, uiH = 56;
-    const fetchW = 112, fetchH = 112;
-    final safeUrl = _unsplashSafe(url, w: fetchW, h: fetchH, forceJpg: true);
-
-    return Image.network(
-      safeUrl,
-      width: uiW.toDouble(),
-      height: uiH.toDouble(),
-      fit: BoxFit.cover,
-      cacheWidth: fetchW,
-      cacheHeight: fetchH,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return SizedBox(
-          width: uiW.toDouble(),
-          height: uiH.toDouble(),
-          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-        );
-      },
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          width: uiW.toDouble(),
-          height: uiH.toDouble(),
-          color: Colors.grey.shade200,
-          alignment: Alignment.center,
-          child: const Icon(Icons.image_not_supported, size: 20),
         );
       },
     );
-  }
-
-  /// For Unsplash, ensure decodeable JPEG/crop and target size.
-  String _unsplashSafe(
-    String url, {
-    required int w,
-    required int h,
-    bool forceJpg = false,
-  }) {
-    final uri = Uri.tryParse(url);
-    if (uri == null || uri.host != 'images.unsplash.com') return url;
-
-    final qp = Map<String, String>.from(uri.queryParameters)
-      ..putIfAbsent('auto', () => 'format')
-      ..putIfAbsent('fit', () => 'crop')
-      ..putIfAbsent('w', () => '$w')
-      ..putIfAbsent('h', () => '$h')
-      ..putIfAbsent('q', () => '80');
-    if (forceJpg) qp.putIfAbsent('fm', () => 'jpg');
-
-    return uri.replace(queryParameters: qp).toString();
   }
 }

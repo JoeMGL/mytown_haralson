@@ -354,7 +354,7 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
         icon: const Icon(Icons.add),
         label: const Text('Add Club / Group'),
         foregroundColor: Colors.white,
-        backgroundColor: Color(0xFF146C43),
+        backgroundColor: const Color(0xFF146C43),
       ),
     );
   }

@@ -1,8 +1,12 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+
+import '../../../widgets/location_selector.dart';
+import '../../../models/place.dart';
 
 class AddAttractionPage extends StatefulWidget {
   const AddAttractionPage({super.key});
+
   @override
   State<AddAttractionPage> createState() => _AddAttractionPageState();
 }
@@ -18,13 +22,21 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
   bool _featured = false;
   bool _saving = false;
 
-  // Fields used by ExploreDetailPage
+  // Detail fields
   String _imageUrl = '';
   String _heroTag = '';
   String _description = '';
   String _hours = '';
-  String _tagsText = ''; // comma-separated input, saved as List<String>
+  String _tagsText = '';
   String _mapQuery = '';
+
+  // Location
+  String? _stateId;
+  String? _stateName;
+  String? _metroId;
+  String? _metroName;
+  String? _areaId;
+  String? _areaName;
 
   GeoPoint? _parseLatLng(String input) {
     final t = input.trim();
@@ -41,40 +53,64 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
     if (!_form.currentState!.validate()) return;
     _form.currentState!.save();
 
+    if (_stateId == null || _metroId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a state and metro for this attraction.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
 
     try {
       final geo = _parseLatLng(_coords);
 
-      // convert comma-separated tags to List<String>
       final tags = _tagsText
           .split(',')
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
 
-      await FirebaseFirestore.instance.collection('attractions').add({
-        // existing fields
-        'name': _name,
-        'city': _city,
-        'category': _category,
-        'coords': geo,
-        'featured': _featured,
+      final title = _name.trim();
 
-        // fields used by ExploreDetailPage
-        'title': _name, // or store separately if you want
-        'imageUrl': _imageUrl,
-        'heroTag': _heroTag.isEmpty ? _name : _heroTag,
-        'description': _description,
-        'hours': _hours.isEmpty ? null : _hours,
-        'tags': tags,
-        'mapQuery': _mapQuery.isEmpty ? null : _mapQuery,
+      final place = Place(
+        id: '',
+        name: title,
+        title: title,
+        city: _city.trim(),
+        category: _category,
+        imageUrl: _imageUrl.trim(),
+        heroTag: _heroTag.trim().isEmpty ? title : _heroTag.trim(),
+        description: _description.trim(),
+        hours: _hours.trim().isEmpty ? null : _hours.trim(),
+        tags: tags,
+        mapQuery: _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
+        coords: geo,
+        featured: _featured,
+        active: true,
+        search: [
+          title.toLowerCase(),
+          _city.toLowerCase(),
+          _category.toLowerCase(),
+        ],
+        stateId: _stateId ?? '',
+        stateName: _stateName ?? '',
+        metroId: _metroId ?? '',
+        metroName: _metroName ?? '',
+        areaId: _areaId ?? '',
+        areaName: _areaName ?? '',
+      );
+
+      await FirebaseFirestore.instance.collection('attractions').add({
+        ...place.toMap(),
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
+      if (!mounted) return;
+      Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -167,7 +203,7 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
             ),
             const SizedBox(height: 20),
 
-            // Existing fields: City, Category, Coords, Featured
+            // City
             DropdownButtonFormField<String>(
               value: _city,
               decoration: const InputDecoration(labelText: 'City'),
@@ -178,6 +214,7 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
             ),
             const SizedBox(height: 12),
 
+            // Category
             DropdownButtonFormField<String>(
               value: _category,
               decoration: const InputDecoration(labelText: 'Category'),
@@ -186,12 +223,31 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
                 'History',
                 'Shopping',
                 'Dining',
-                'Lodging'
+                'Lodging',
               ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
               onChanged: (v) => setState(() => _category = v ?? _category),
             ),
             const SizedBox(height: 12),
 
+            // Location selector (state/metro/area)
+            LocationSelector(
+              initialStateId: _stateId,
+              initialMetroId: _metroId,
+              initialAreaId: _areaId,
+              onChanged: (loc) {
+                setState(() {
+                  _stateId = loc.stateId;
+                  _stateName = loc.stateName;
+                  _metroId = loc.metroId;
+                  _metroName = loc.metroName;
+                  _areaId = loc.areaId;
+                  _areaName = loc.areaName;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+
+            // Coords
             TextFormField(
               decoration: const InputDecoration(
                 labelText: 'Coords (lat,lng)',

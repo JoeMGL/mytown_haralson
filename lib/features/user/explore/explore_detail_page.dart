@@ -1,34 +1,34 @@
-// explore_detail_page.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../../models/place.dart';
 
 class ExploreDetailPage extends StatelessWidget {
   const ExploreDetailPage({
     super.key,
-    required this.title,
-    required this.imageUrl,
-    required this.heroTag,
-    required this.description,
-    this.hours,
-    this.tags = const [],
-    this.mapQuery, // optional custom maps query string
+    required this.place,
   });
 
-  final String title;
-  final String imageUrl;
-  final String heroTag;
-  final String description;
-  final String? hours;
-  final List<String> tags;
-  final String? mapQuery;
+  final Place place;
 
   @override
   Widget build(BuildContext context) {
-    // Larger image size for header
-    final headerUrl = _unsplashSafe(imageUrl, w: 1600, h: 900, forceJpg: true);
+    final cs = Theme.of(context).colorScheme;
+    final heroTag =
+        place.heroTag.isNotEmpty ? place.heroTag : 'place_${place.id}';
+
+    final headerUrl =
+        _unsplashSafe(place.imageUrl, w: 1600, h: 900, forceJpg: true);
+
+    final regionLine = [
+      if (place.city.isNotEmpty) place.city,
+      if (place.stateName.isNotEmpty) place.stateName,
+      if (place.metroName.isNotEmpty) place.metroName,
+      if (place.areaName.isNotEmpty) place.areaName,
+    ].join(' • ');
 
     return Scaffold(
-      appBar: AppBar(title: Text(title)),
+      appBar: AppBar(title: Text(place.title)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -36,75 +36,134 @@ class ExploreDetailPage extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: Hero(
               tag: heroTag,
-              child: Image.network(
-                headerUrl,
-                fit: BoxFit.cover,
-                height: 220,
-                width: double.infinity,
-              ),
+              child: headerUrl.isNotEmpty
+                  ? Image.network(
+                      headerUrl,
+                      height: 220,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  : Container(
+                      height: 220,
+                      color: cs.surfaceContainerHighest,
+                      child: Icon(
+                        Icons.landscape,
+                        size: 64,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            title,
+            place.title,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
-          if (hours != null) ...[
-            const SizedBox(height: 6),
+          const SizedBox(height: 4),
+          if (place.category.isNotEmpty || regionLine.isNotEmpty)
+            Text(
+              [
+                if (place.category.isNotEmpty) place.category,
+                if (regionLine.isNotEmpty) regionLine,
+              ].join(' • '),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          const SizedBox(height: 12),
+          if (place.hours != null && place.hours!.isNotEmpty) ...[
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.schedule, size: 18),
-                const SizedBox(width: 6),
-                Text(hours!,
-                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    place.hours!,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
               ],
             ),
+            const SizedBox(height: 16),
           ],
-          const SizedBox(height: 8),
-          Text(description),
-          const SizedBox(height: 20),
-          if (tags.isNotEmpty)
+          if (place.description.isNotEmpty) ...[
+            Text(
+              place.description,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (place.tags.isNotEmpty) ...[
             Wrap(
               spacing: 8,
-              runSpacing: -4,
-              children: tags.map((t) => Chip(label: Text(t))).toList(),
+              runSpacing: 4,
+              children: place.tags.map((tag) {
+                return Chip(
+                  label: Text(tag),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                );
+              }).toList(),
             ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => _openMaps(),
-            icon: const Icon(Icons.map),
-            label: const Text('Get Directions'),
+            const SizedBox(height: 16),
+          ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (place.mapQuery != null && place.mapQuery!.isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final encoded = Uri.encodeComponent(place.mapQuery!);
+                    final url =
+                        'https://www.google.com/maps/search/?api=1&query=$encoded';
+                    _launchUrl(url);
+                  },
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Open in Maps'),
+                )
+              else
+                OutlinedButton.icon(
+                  onPressed: () {
+                    final encoded = Uri.encodeComponent(place.title);
+                    final url =
+                        'https://www.google.com/maps/search/?api=1&query=$encoded';
+                    _launchUrl(url);
+                  },
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Search in Maps'),
+                ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Future<void> _openMaps() async {
-    final q = Uri.encodeComponent(mapQuery ?? title);
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$q');
+  String _unsplashSafe(
+    String url, {
+    int w = 1200,
+    int h = 800,
+    bool forceJpg = false,
+  }) {
+    if (url.isEmpty) return url;
+    if (!url.contains('images.unsplash.com')) return url;
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) return url;
+
+    final qp = Map<String, String>.from(uri.queryParameters);
+    qp['w'] = '$w';
+    qp['h'] = '$h';
+    qp['fit'] = 'crop';
+    if (forceJpg) qp['fm'] = 'jpg';
+
+    return uri.replace(queryParameters: qp).toString();
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
-  }
-
-  String _unsplashSafe(
-    String url, {
-    required int w,
-    required int h,
-    bool forceJpg = false,
-  }) {
-    final uri = Uri.tryParse(url);
-    if (uri == null || uri.host != 'images.unsplash.com') return url;
-
-    final qp = Map<String, String>.from(uri.queryParameters)
-      ..putIfAbsent('auto', () => 'format')
-      ..putIfAbsent('fit', () => 'crop')
-      ..putIfAbsent('w', () => '$w')
-      ..putIfAbsent('h', () => '$h')
-      ..putIfAbsent('q', () => '80');
-    if (forceJpg) qp.putIfAbsent('fm', () => 'jpg');
-
-    return uri.replace(queryParameters: qp).toString();
   }
 }

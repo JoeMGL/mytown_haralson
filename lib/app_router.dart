@@ -37,7 +37,7 @@ import 'models/shop.dart';
 
 // ADMIN PAGES
 import 'features/admin/dashboard_page.dart';
-import 'features/admin/add_attraction_page.dart';
+import 'features/admin/explore/add_attraction_page.dart';
 import 'features/admin/clubs/edit_club_page.dart';
 import 'features/admin/eat_and_drink/add_eat_and_drink_page.dart';
 import 'features/admin/eat_and_drink/admin_eat_and_drink_page.dart';
@@ -82,16 +82,7 @@ final GoRouter appRouter = GoRouter(
               name: 'exploreDetail',
               builder: (context, state) {
                 final place = state.extra as Place;
-
-                return ExploreDetailPage(
-                  title: place.title, // fixed: Place.name instead of title
-                  imageUrl: place.imageUrl,
-                  heroTag: place.heroTag,
-                  description: place.description,
-                  hours: place.hours,
-                  tags: place.tags,
-                  mapQuery: place.mapQuery,
-                );
+                return ExploreDetailPage(place: place);
               },
             ),
           ],
