@@ -4,17 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../models/place.dart';
+import '../../../models/category.dart';
+import '../../../models/section.dart';
 import '/core/location/location_provider.dart';
 
-/// Categories for Explore
-enum ExploreCategory { outdoor, museums, landmarks, family }
-
-const categoryLabels = {
-  ExploreCategory.outdoor: 'Outdoor Recreation',
-  ExploreCategory.museums: 'Museums',
-  ExploreCategory.landmarks: 'Landmarks',
-  ExploreCategory.family: 'Family',
-};
+// 🔑 This is the slug stored in sections.slug for the Explore/Attractions section
+const String kExploreSectionSlug = 'Explore';
 
 class ExplorePage extends ConsumerStatefulWidget {
   const ExplorePage({super.key});
@@ -24,12 +19,97 @@ class ExplorePage extends ConsumerStatefulWidget {
 }
 
 class _ExplorePageState extends ConsumerState<ExplorePage> {
-  ExploreCategory _cat = ExploreCategory.outdoor;
+  // Section metadata from /sections
+  Section? _section;
+  bool _loadingSection = true;
+  String? _sectionError;
+
+  // Dynamic categories
+  List<Category> _categories = [];
+  String? _selectedCategorySlug; // null = "All"
+  bool _loadingCategories = true;
+  String? _categoriesError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSection();
+    _loadCategories();
+  }
+
+  Future<void> _loadSection() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('sections')
+          .where('slug', isEqualTo: kExploreSectionSlug)
+          .limit(1)
+          .get();
+
+      if (!mounted) return;
+
+      if (snap.docs.isNotEmpty) {
+        setState(() {
+          _section = Section.fromDoc(snap.docs.first);
+          _loadingSection = false;
+          _sectionError = null;
+        });
+      } else {
+        setState(() {
+          _section = null;
+          _loadingSection = false;
+          _sectionError = 'No section found with slug "$kExploreSectionSlug".';
+        });
+      }
+    } catch (e, st) {
+      debugPrint('Error loading section: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _loadingSection = false;
+        _sectionError = e.toString();
+      });
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('categories')
+          .where('section', isEqualTo: kExploreSectionSlug)
+          .orderBy('sortOrder')
+          .get();
+
+      final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        _categories = cats;
+        _categoriesError = null;
+        _loadingCategories = false;
+      });
+    } catch (e, st) {
+      debugPrint('Error loading explore categories: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _loadingCategories = false;
+        _categoriesError = e.toString();
+        _categories = [];
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final locationAsync = ref.watch(locationProvider);
+
+    final title = () {
+      if (_loadingSection) return 'Explore';
+      if (_section != null && _section!.name.isNotEmpty) {
+        return _section!.name; // e.g. "Explore Haralson" or "Attractions"
+      }
+      return 'Explore';
+    }();
 
     return locationAsync.when(
       loading: () => const Scaffold(
@@ -53,25 +133,22 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
         }
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Explore')),
+          appBar: AppBar(title: Text(title)),
           body: Column(
             children: [
-              // Category chips
+              if (_sectionError != null)
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    _sectionError!,
+                    style: TextStyle(color: cs.error),
+                  ),
+                ),
+
+              // Category chips (dynamic)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Wrap(
-                  spacing: 8,
-                  children: ExploreCategory.values.map((c) {
-                    final selected = _cat == c;
-                    return ChoiceChip(
-                      label: Text(categoryLabels[c] ?? c.name),
-                      selected: selected,
-                      onSelected: (_) {
-                        setState(() => _cat = c);
-                      },
-                    );
-                  }).toList(),
-                ),
+                child: _buildCategoryChips(context),
               ),
               const Divider(height: 1),
 
@@ -107,28 +184,65 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                         .where((p) => p.active)
                         .toList();
 
-                    // Filter by our categories
-                    places = places.where((p) {
-                      switch (_cat) {
-                        case ExploreCategory.outdoor:
-                          return p.category == 'Outdoor';
-                        case ExploreCategory.museums:
-                          return p.category == 'History' ||
-                              p.category == 'Museum';
-                        case ExploreCategory.landmarks:
-                          return p.category == 'Landmarks' ||
-                              p.category == 'Shopping';
-                        case ExploreCategory.family:
-                          return p.tags
-                              .map((t) => t.toLowerCase())
-                              .contains('family-friendly');
-                      }
-                    }).toList();
+                    // Filter by selected category (supports slug OR name, case-insensitive)
+                    if (_selectedCategorySlug != null &&
+                        _selectedCategorySlug!.isNotEmpty) {
+                      final selectedSlug = _selectedCategorySlug!;
+                      final selectedSlugLower = selectedSlug.toLowerCase();
+
+                      // Try to find the full Category so we also know its display name
+                      final selectedCategory = _categories.firstWhere(
+                        (c) => c.slug == selectedSlug,
+                        orElse: () => _categories.firstWhere(
+                          (c) => c.name.toLowerCase() == selectedSlugLower,
+                          orElse: () => Category(
+                            id: '',
+                            section: kExploreSectionSlug,
+                            slug: selectedSlug,
+                            name: selectedSlug,
+                            sortOrder: 0,
+                            isActive: true,
+                          ),
+                        ),
+                      );
+
+                      final selectedNameLower =
+                          selectedCategory.name.toLowerCase();
+
+                      places = places.where((p) {
+                        // Gather all category values from the place
+                        final values = <String>[
+                          if (p.category.isNotEmpty) p.category,
+                          ...p.categories,
+                        ].map((v) => v.toLowerCase()).toList();
+
+                        // Match if any of them equals the slug OR the name
+                        return values.contains(selectedSlugLower) ||
+                            values.contains(selectedNameLower);
+                      }).toList();
+                    }
 
                     if (places.isEmpty) {
                       return const Center(
                         child: Text('No places match this filter.'),
                       );
+                    }
+
+                    // Helper to get category label from slug
+                    String _resolveCategoryLabel(Place p) {
+                      final slug = p.category;
+                      final cat = _categories.firstWhere(
+                        (c) => c.slug == slug,
+                        orElse: () => Category(
+                          id: '',
+                          section: kExploreSectionSlug,
+                          slug: slug,
+                          name: slug, // fallback
+                          sortOrder: 0,
+                          isActive: true,
+                        ),
+                      );
+                      return cat.name;
                     }
 
                     return ListView.separated(
@@ -140,6 +254,10 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                         final heroTag = place.heroTag.isNotEmpty
                             ? place.heroTag
                             : 'place_${place.id}';
+
+                        final categoryLabel = _categories.isEmpty
+                            ? place.category
+                            : _resolveCategoryLabel(place);
 
                         return Card(
                           clipBehavior: Clip.antiAlias,
@@ -189,7 +307,9 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                                           children: [
                                             Expanded(
                                               child: Text(
-                                                place.title,
+                                                place.title.isNotEmpty
+                                                    ? place.title
+                                                    : place.name,
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .titleMedium
@@ -210,8 +330,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                                         const SizedBox(height: 4),
                                         Text(
                                           [
-                                            if (place.category.isNotEmpty)
-                                              place.category,
+                                            if (categoryLabel.isNotEmpty)
+                                              categoryLabel,
                                             if (place.city.isNotEmpty)
                                               place.city,
                                           ].join(' • '),
@@ -249,6 +369,62 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCategoryChips(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    if (_loadingCategories) {
+      return Row(
+        children: const [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 8),
+          Text('Loading categories...'),
+        ],
+      );
+    }
+
+    if (_categoriesError != null) {
+      return Text(
+        'Error loading categories: $_categoriesError',
+        style: TextStyle(color: cs.error),
+      );
+    }
+
+    if (_categories.isEmpty) {
+      return const Text(
+        'No categories configured yet.',
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      children: [
+        // "All" chip
+        ChoiceChip(
+          label: const Text('All'),
+          selected: _selectedCategorySlug == null,
+          onSelected: (_) {
+            setState(() => _selectedCategorySlug = null);
+          },
+        ),
+        // One chip per category from Firestore
+        ..._categories.map((cat) {
+          final selected = _selectedCategorySlug == cat.slug;
+          return ChoiceChip(
+            label: Text(cat.name),
+            selected: selected,
+            onSelected: (_) {
+              setState(() => _selectedCategorySlug = cat.slug);
+            },
+          );
+        }),
+      ],
     );
   }
 }

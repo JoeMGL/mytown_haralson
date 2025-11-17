@@ -53,6 +53,7 @@ import 'features/admin/users_and_roles_page.dart';
 import 'features/admin/add_announcement_page.dart';
 import 'features/admin/clubs/add_club_page.dart';
 import 'features/admin/clubs/admin_clubs_page.dart';
+import 'features/admin/categories/admin_sections_page.dart';
 import 'features/admin/categories/admin_categories_page.dart';
 import 'features/admin/config/global.dart';
 
@@ -241,7 +242,6 @@ final GoRouter appRouter = GoRouter(
                 );
               },
             ),
-
             // /admin/attractions/categories  (optional, but handy)
             GoRoute(
               path: 'categories',
@@ -405,6 +405,15 @@ final GoRouter appRouter = GoRouter(
             child: AdminShell(
               title: 'Locations',
               child: AdminLocationSetupPage(),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: 'sections',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AdminShell(
+              title: 'Sections',
+              child: AdminSectionsPage(),
             ),
           ),
         ),

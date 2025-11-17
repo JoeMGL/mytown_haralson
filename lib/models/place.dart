@@ -195,23 +195,19 @@ class Place {
     return {
       'name': name,
       'title': title,
-
-      // Address
       'street': street,
       'city': city,
       'state': state,
       'zip': zip,
-
       'category': category,
       'categories': categories,
-      'imageUrl': imageUrl,
+      'imageUrl': imageUrl, // 👈 must exist
       'heroTag': heroTag,
       'description': description,
-
-      'hours': hours,
-      'hoursByDay':
-          hoursByDay.map((key, value) => MapEntry(key, value.toMap())),
-
+      'hours': hours, // if you still have legacy hours
+      'hoursByDay': hoursByDay.map(
+        (day, value) => MapEntry(day, value.toMap()),
+      ),
       'tags': tags,
       'mapQuery': mapQuery,
       'coords': coords,

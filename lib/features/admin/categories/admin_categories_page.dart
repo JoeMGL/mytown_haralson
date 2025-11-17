@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/category.dart';
+import '../../../models/section.dart';
 
 class AdminCategoriesPage extends StatefulWidget {
   const AdminCategoriesPage({super.key});
@@ -11,23 +12,24 @@ class AdminCategoriesPage extends StatefulWidget {
 }
 
 class _AdminCategoriesPageState extends State<AdminCategoriesPage> {
-  // Which section’s categories we’re editing
-  String _selectedSection = 'attractions';
+  // Currently selected section slug (e.g. "attractions", "eat")
+  String? _selectedSectionSlug;
 
-  // If you want other sections, add them here
-  final List<String> _sections = [
-    'attractions',
-    'eat',
-    'stay',
-    'events',
-    // 'shopping',
-    // 'services',
-  ];
-
-  CollectionReference<Map<String, dynamic>> get _col =>
+  CollectionReference<Map<String, dynamic>> get _categoriesCol =>
       FirebaseFirestore.instance.collection('categories');
 
+  CollectionReference<Map<String, dynamic>> get _sectionsCol =>
+      FirebaseFirestore.instance.collection('sections');
+
   Future<void> _showCategoryDialog({Category? existing}) async {
+    // Must have a section selected
+    if (_selectedSectionSlug == null || _selectedSectionSlug!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please create/select a section first.')),
+      );
+      return;
+    }
+
     final formKey = GlobalKey<FormState>();
 
     String name = existing?.name ?? '';
@@ -82,14 +84,16 @@ class _AdminCategoriesPageState extends State<AdminCategoriesPage> {
                     onSaved: (v) => sortOrder = int.parse(v!.trim()),
                   ),
                   const SizedBox(height: 12),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Active'),
-                    value: isActive,
-                    onChanged: (value) {
-                      setState(() {
-                        isActive = value;
-                      });
+                  StatefulBuilder(
+                    builder: (context, setInnerState) {
+                      return SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Active'),
+                        value: isActive,
+                        onChanged: (value) {
+                          setInnerState(() => isActive = value);
+                        },
+                      );
                     },
                   ),
                 ],
@@ -108,22 +112,20 @@ class _AdminCategoriesPageState extends State<AdminCategoriesPage> {
 
                 try {
                   if (existing == null) {
-                    // Add new
-                    await _col.add({
+                    await _categoriesCol.add({
                       'name': name,
                       'slug': slug,
-                      'section': _selectedSection,
+                      'section': _selectedSectionSlug, // <- IMPORTANT
                       'isActive': isActive,
                       'sortOrder': sortOrder,
                       'createdAt': FieldValue.serverTimestamp(),
                       'updatedAt': FieldValue.serverTimestamp(),
                     });
                   } else {
-                    // Update existing
-                    await _col.doc(existing.id).update({
+                    await _categoriesCol.doc(existing.id).update({
                       'name': name,
                       'slug': slug,
-                      'section': _selectedSection,
+                      'section': _selectedSectionSlug, // keep in sync
                       'isActive': isActive,
                       'sortOrder': sortOrder,
                       'updatedAt': FieldValue.serverTimestamp(),
@@ -168,7 +170,7 @@ class _AdminCategoriesPageState extends State<AdminCategoriesPage> {
     if (confirmed != true) return;
 
     try {
-      await _col.doc(cat.id).delete();
+      await _categoriesCol.doc(cat.id).delete();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -187,90 +189,143 @@ class _AdminCategoriesPageState extends State<AdminCategoriesPage> {
       ),
       body: Column(
         children: [
-          // Section selector
+          // 🔽 Section selector from /sections
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                const Text('Section:'),
-                const SizedBox(width: 12),
-                DropdownButton<String>(
-                  value: _selectedSection,
-                  items: _sections
-                      .map(
-                        (s) => DropdownMenuItem(
-                          value: s,
-                          child: Text(s),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _selectedSection = value);
-                  },
-                ),
-              ],
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _sectionsCol.orderBy('sortOrder').snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Row(
+                    children: [
+                      Text('Section:'),
+                      SizedBox(width: 12),
+                      CircularProgressIndicator(),
+                    ],
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Text('Error loading sections: ${snapshot.error}');
+                }
+
+                final docs = snapshot.data?.docs ?? [];
+                final sections = docs.map((d) => Section.fromDoc(d)).toList();
+
+                if (sections.isEmpty) {
+                  return const Text(
+                    'No sections yet. Go to "Sections" and add one.',
+                  );
+                }
+
+// Ensure selected slug is always valid
+                if (_selectedSectionSlug == null ||
+                    !sections.any((s) => s.slug == _selectedSectionSlug)) {
+                  // 🔧 FIX: use setState so the whole widget (incl. categories) rebuilds
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    setState(() {
+                      _selectedSectionSlug = sections.first.slug;
+                    });
+                  });
+                }
+
+                return Row(
+                  children: [
+                    const Text('Section:'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: _selectedSectionSlug,
+                        items: sections
+                            .map(
+                              (s) => DropdownMenuItem(
+                                value: s.slug,
+                                child: Text(s.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() => _selectedSectionSlug = value);
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
 
           const Divider(height: 0),
 
+          // 🔁 Categories for the selected section
           Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _col
-                  .where('section', isEqualTo: _selectedSection)
-                  .orderBy('sortOrder')
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                      child:
-                          Text('Error loading categories: ${snapshot.error}'));
-                }
+            child: _selectedSectionSlug == null
+                ? const Center(
+                    child: Text('Select a section to view its categories.'),
+                  )
+                : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: _categoriesCol
+                        .where('section', isEqualTo: _selectedSectionSlug)
+                        .orderBy('sortOrder')
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Error loading categories: ${snapshot.error}',
+                          ),
+                        );
+                      }
 
-                final docs = snapshot.data?.docs ?? [];
+                      final docs = snapshot.data?.docs ?? [];
 
-                if (docs.isEmpty) {
-                  return const Center(
-                    child: Text('No categories yet. Add your first one!'),
-                  );
-                }
+                      if (docs.isEmpty) {
+                        return const Center(
+                          child: Text(
+                            'No categories yet for this section. Add your first one!',
+                          ),
+                        );
+                      }
 
-                final categories =
-                    docs.map((d) => Category.fromDoc(d)).toList();
+                      final categories =
+                          docs.map((d) => Category.fromDoc(d)).toList();
 
-                return ListView.separated(
-                  itemCount: categories.length,
-                  separatorBuilder: (_, __) => const Divider(height: 0),
-                  itemBuilder: (context, index) {
-                    final cat = categories[index];
-                    return ListTile(
-                      title: Text(cat.name),
-                      subtitle: Text(
-                        '${cat.slug} • order: ${cat.sortOrder}${cat.isActive ? '' : ' • INACTIVE'}',
-                      ),
-                      leading: CircleAvatar(
-                        backgroundColor: cat.isActive
-                            ? cs.primary.withOpacity(0.1)
-                            : cs.error.withOpacity(0.1),
-                        child: Icon(
-                          cat.isActive ? Icons.label : Icons.label_off,
-                          color: cat.isActive ? cs.primary : cs.error,
-                        ),
-                      ),
-                      onTap: () => _showCategoryDialog(existing: cat),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _deleteCategory(cat),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                      return ListView.separated(
+                        itemCount: categories.length,
+                        separatorBuilder: (_, __) => const Divider(height: 0),
+                        itemBuilder: (context, index) {
+                          final cat = categories[index];
+                          return ListTile(
+                            title: Text(cat.name),
+                            subtitle: Text(
+                              '${cat.slug} • order: ${cat.sortOrder}'
+                              '${cat.isActive ? '' : ' • INACTIVE'}',
+                            ),
+                            leading: CircleAvatar(
+                              backgroundColor: cat.isActive
+                                  ? cs.primary.withOpacity(0.1)
+                                  : cs.error.withOpacity(0.1),
+                              child: Icon(
+                                cat.isActive ? Icons.label : Icons.label_off,
+                                color: cat.isActive ? cs.primary : cs.error,
+                              ),
+                            ),
+                            onTap: () => _showCategoryDialog(existing: cat),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () => _deleteCategory(cat),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
         ],
       ),

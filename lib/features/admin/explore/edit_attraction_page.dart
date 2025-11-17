@@ -2,9 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/place.dart';
-import '../../../models/category.dart'; // 👈 NEW
+import '../../../models/category.dart';
 import '../../../widgets/location_selector.dart';
 import '../../../widgets/weekly_hours_field.dart';
+
+// 🔑 Must match categories.section for the Explore/Attractions section
+// e.g. if docs have { section: "Explore" } keep this as 'Explore'
+const String kExploreSectionSlug = 'Explore';
 
 class EditAttractionPage extends StatefulWidget {
   const EditAttractionPage({
@@ -21,15 +25,18 @@ class EditAttractionPage extends StatefulWidget {
 class _EditAttractionPageState extends State<EditAttractionPage> {
   final _form = GlobalKey<FormState>();
 
-  // Core fields
-  late String _name;
+  // Controllers for fields that were not saving correctly
+  late TextEditingController _nameController;
+  late TextEditingController _imageUrlController;
+
+  // Core flags
   late String _coords;
   late bool _featured;
   late bool _active;
 
-  // Category (dynamic)
-  String? _categorySlug; // e.g. "outdoor", "history"
+  // Categories (multi-select)
   List<Category> _categories = [];
+  Set<String> _selectedCategorySlugs = {};
   bool _loadingCategories = true;
   String? _categoriesError;
 
@@ -40,7 +47,6 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
   late String _zip;
 
   // Detail fields
-  late String _imageUrl;
   late String _heroTag;
   late String _description;
   late String _hours; // legacy free-text
@@ -65,7 +71,9 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
     super.initState();
     final p = widget.place;
 
-    _name = p.title;
+    // Controllers for fields that must round-trip perfectly
+    _nameController = TextEditingController(text: p.title);
+    _imageUrlController = TextEditingController(text: p.imageUrl);
 
     // Address
     _street = p.street;
@@ -73,22 +81,31 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
     _state = p.state;
     _zip = p.zip;
 
-    // Category slug stored on Place (from AddAttractionPage)
-    _categorySlug = p.category; // e.g. "outdoor", "history"
+    // Categories: use existing multi-cats if present, otherwise fallback to primary
+    if (p.categories.isNotEmpty) {
+      _selectedCategorySlugs = p.categories.toSet();
+    } else if (p.category.isNotEmpty) {
+      _selectedCategorySlugs = {p.category};
+    } else {
+      _selectedCategorySlugs = {};
+    }
 
-    _imageUrl = p.imageUrl;
+    // Detail fields
     _heroTag = p.heroTag;
     _description = p.description;
     _hours = p.hours ?? '';
     _tagsText = p.tags.join(', ');
     _mapQuery = p.mapQuery ?? '';
 
+    // Coords
     _coords =
         p.coords != null ? '${p.coords!.latitude},${p.coords!.longitude}' : '';
 
+    // Flags
     _featured = p.featured;
     _active = p.active;
 
+    // Location
     _stateId = p.stateId.isNotEmpty ? p.stateId : null;
     _stateName = p.stateName;
     _metroId = p.metroId.isNotEmpty ? p.metroId : null;
@@ -102,26 +119,44 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
     _loadCategories();
   }
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _imageUrlController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadCategories() async {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('categories')
-          .where('section', isEqualTo: 'attractions')
+          .where('section', isEqualTo: kExploreSectionSlug)
           .orderBy('sortOrder')
           .get();
 
       final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      if (!mounted) return;
 
       setState(() {
         _categories = cats;
         _categoriesError = null;
         _loadingCategories = false;
 
-        // If no slug yet but we have categories, default to the first
-        if (_categorySlug == null && _categories.isNotEmpty) {
-          _categorySlug = _categories.first.slug;
+        // If nothing is selected but we have categories, pick the first one
+        if (_categories.isNotEmpty && _selectedCategorySlugs.isEmpty) {
+          _selectedCategorySlugs = {_categories.first.slug};
         }
       });
+
+      // Optional debug
+      // ignore: avoid_print
+      print(
+          'EditAttractionPage loaded ${cats.length} categories for section $kExploreSectionSlug');
+      for (final c in cats) {
+        // ignore: avoid_print
+        print('Category: ${c.name} | slug: ${c.slug} | section: ${c.section}');
+      }
     } catch (e, st) {
       debugPrint('Error loading categories in EditAttractionPage: $e\n$st');
       if (!mounted) return;
@@ -163,26 +198,38 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
     }
 
     if (_categories.isEmpty) {
-      return const Text(
-        'No categories configured for attractions.\n'
-        'Add some in the Admin → Categories page with section "attractions".',
+      return Text(
+        'No categories configured for section "$kExploreSectionSlug".\n'
+        'Add some in the Admin → Categories page with section "$kExploreSectionSlug".',
       );
     }
 
-    return DropdownButtonFormField<String>(
-      value: _categorySlug,
-      decoration: const InputDecoration(labelText: 'Category'),
-      items: _categories
-          .map(
-            (c) => DropdownMenuItem(
-              value: c.slug,
-              child: Text(c.name),
-            ),
-          )
-          .toList(),
-      onChanged: (v) => setState(() => _categorySlug = v),
-      validator: (v) =>
-          (v == null || v.isEmpty) ? 'Please select a category' : null,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Categories'),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: _categories.map((cat) {
+            final selected = _selectedCategorySlugs.contains(cat.slug);
+            return FilterChip(
+              label: Text(cat.name),
+              selected: selected,
+              onSelected: (value) {
+                setState(() {
+                  if (value) {
+                    _selectedCategorySlugs.add(cat.slug);
+                  } else {
+                    _selectedCategorySlugs.remove(cat.slug);
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -199,7 +246,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
 
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
-    _form.currentState!.save();
+    _form.currentState!.save(); // still needed for fields using onSaved
 
     if (_stateId == null || _metroId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -210,10 +257,10 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
       return;
     }
 
-    if (_categorySlug == null || _categorySlug!.isEmpty) {
+    if (_selectedCategorySlugs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select a category.'),
+          content: Text('Please select at least one category.'),
         ),
       );
       return;
@@ -230,12 +277,18 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
           .where((e) => e.isNotEmpty)
           .toList();
 
-      final title = _name.trim();
+      // Read from controllers so we always get the latest edits
+      final title = _nameController.text.trim();
+      final imageUrl = _imageUrlController.text.trim();
+
       final street = _street.trim();
       final city = _city.trim();
       final state = _state.trim();
       final zip = _zip.trim();
-      final categorySlug = _categorySlug!.trim();
+
+      // Make category list deterministic
+      final categorySlugs = _selectedCategorySlugs.toList()..sort();
+      final primaryCategory = categorySlugs.first;
 
       await FirebaseFirestore.instance
           .collection('attractions')
@@ -250,34 +303,44 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
         'state': state,
         'zip': zip,
 
-        // Category stored as slug
-        'category': categorySlug,
+        // Category stored as primary + all
+        'category': primaryCategory,
+        'categories': categorySlugs,
 
-        'imageUrl': _imageUrl.trim(),
+        'imageUrl': imageUrl,
         'heroTag': _heroTag.trim().isEmpty ? title : _heroTag.trim(),
         'description': _description.trim(),
+
+        // Legacy hours + structured hours
         'hours': _hours.trim().isEmpty ? null : _hours.trim(),
         'hoursByDay':
             _hoursByDay.map((key, value) => MapEntry(key, value.toMap())),
+
         'tags': tags,
-        'mapQuery': _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
+        'mapQuery': _mapQuery.trim().isNotEmpty ? _mapQuery.trim() : null,
         'coords': geo,
         'featured': _featured,
         'active': _active,
-        'stateId': _stateId,
+
+        // Location
+        'stateId': _stateId ?? '',
         'stateName': _stateName ?? '',
-        'metroId': _metroId,
+        'metroId': _metroId ?? '',
         'metroName': _metroName ?? '',
-        'areaId': _areaId,
+        'areaId': _areaId ?? '',
         'areaName': _areaName ?? '',
+
+        // Search keywords
         'search': [
           title.toLowerCase(),
           city.toLowerCase(),
-          categorySlug.toLowerCase(),
+          primaryCategory.toLowerCase(),
+          ...categorySlugs.map((c) => c.toLowerCase()),
           if (street.isNotEmpty) street.toLowerCase(),
           if (state.isNotEmpty) state.toLowerCase(),
           if (zip.isNotEmpty) zip.toLowerCase(),
         ],
+
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -288,10 +351,10 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error updating attraction: $e')),
       );
+      setState(() => _saving = false);
     }
   }
 
@@ -310,9 +373,8 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
             children: [
               // Name
               TextFormField(
-                initialValue: _name,
+                controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Name / Title'),
-                onSaved: (v) => _name = v?.trim() ?? '',
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
@@ -320,10 +382,9 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
 
               // Image URL
               TextFormField(
-                initialValue: _imageUrl,
+                controller: _imageUrlController,
                 decoration: const InputDecoration(
                     labelText: 'Image URL (Unsplash or other)'),
-                onSaved: (v) => _imageUrl = v?.trim() ?? '',
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
@@ -349,6 +410,17 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
                 onSaved: (v) => _description = v?.trim() ?? '',
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+
+              // Legacy hours (optional, string)
+              TextFormField(
+                initialValue: _hours,
+                decoration: const InputDecoration(
+                  labelText: 'Hours (text, optional)',
+                  hintText: 'e.g. Mon–Sat 10–6',
+                ),
+                onSaved: (v) => _hours = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
 
@@ -455,7 +527,7 @@ class _EditAttractionPageState extends State<EditAttractionPage> {
               ),
               const SizedBox(height: 20),
 
-              // Category (dynamic)
+              // Categories (multi-select)
               _buildCategoryField(context),
               const SizedBox(height: 12),
 

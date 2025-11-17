@@ -106,6 +106,7 @@ class _AdminDrawer extends StatelessWidget {
             tile('Users & Roles', '/admin/users', Icons.group_outlined),
             tile('Add Locations', '/admin/locations',
                 Icons.location_city_outlined),
+            tile('Manage Sections', '/admin/sections', Icons.category_rounded),
             tile('Manage Categories', '/admin/categories',
                 Icons.category_outlined),
             tile('Settings', '/admin/settings', Icons.settings_outlined),

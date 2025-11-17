@@ -6,6 +6,11 @@ import '../../../widgets/weekly_hours_field.dart';
 import '../../../models/place.dart';
 import '../../../models/category.dart';
 
+// 🔑 Must match the value stored in categories.section for the Explore/Attractions section
+// e.g. if your docs have { section: "Explore" } then keep this as "Explore"
+// If they have { section: "explore" } then change this to 'explore'.
+const String kExploreSectionSlug = 'Explore';
+
 class AddAttractionPage extends StatefulWidget {
   const AddAttractionPage({super.key});
 
@@ -16,8 +21,11 @@ class AddAttractionPage extends StatefulWidget {
 class _AddAttractionPageState extends State<AddAttractionPage> {
   final _form = GlobalKey<FormState>();
 
+  // Controllers for fields that must round-trip perfectly
+  late TextEditingController _nameController;
+  late TextEditingController _imageUrlController;
+
   // Core fields
-  String _name = '';
   String _coords = '';
   bool _featured = false;
   bool _saving = false;
@@ -29,7 +37,6 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
   String _zip = '';
 
   // Detail fields
-  String _imageUrl = '';
   String _heroTag = '';
   String _description = '';
   String _tagsText = '';
@@ -55,28 +62,50 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
   @override
   void initState() {
     super.initState();
+    _nameController = TextEditingController();
+    _imageUrlController = TextEditingController();
     _loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _imageUrlController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadCategories() async {
     try {
       final snap = await FirebaseFirestore.instance
           .collection('categories')
-          .where('section', isEqualTo: 'attractions')
+          .where('section', isEqualTo: kExploreSectionSlug)
           .orderBy('sortOrder')
           .get();
 
       final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      if (!mounted) return;
 
       setState(() {
         _categories = cats;
         _categoriesError = null;
         _loadingCategories = false;
 
+        // Default select first category if none chosen yet
         if (_categories.isNotEmpty && _selectedCategorySlugs.isEmpty) {
           _selectedCategorySlugs = {_categories.first.slug};
         }
       });
+
+      // Optional: debug to verify you're pulling the right docs
+      // ignore: avoid_print
+      print(
+        'Loaded ${cats.length} categories for section $kExploreSectionSlug',
+      );
+      for (final c in cats) {
+        // ignore: avoid_print
+        print('Category: ${c.name} | slug: ${c.slug} | section: ${c.section}');
+      }
     } catch (e, st) {
       debugPrint('Error loading categories in AddAttractionPage: $e\n$st');
       if (!mounted) return;
@@ -105,9 +134,10 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
     }
 
     if (_categories.isEmpty) {
-      return const Text(
-        'No categories configured for attractions.\n'
-        'Add some in the Admin → Categories page with section "attractions".',
+      return Text(
+        'No categories configured for section "$kExploreSectionSlug".\n'
+        'Add some in Admin → Categories with section "$kExploreSectionSlug".',
+        style: Theme.of(context).textTheme.bodyMedium,
       );
     }
 
@@ -153,7 +183,7 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
 
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
-    _form.currentState!.save();
+    _form.currentState!.save(); // still needed for fields using onSaved
 
     if (_stateId == null || _metroId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -184,35 +214,61 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
           .where((e) => e.isNotEmpty)
           .toList();
 
-      final title = _name.trim();
+      // Read from controllers so we always get the latest edits
+      final title = _nameController.text.trim();
+      final imageUrl = _imageUrlController.text.trim();
+
       final street = _street.trim();
       final city = _city.trim();
       final state = _state.trim();
       final zip = _zip.trim();
 
-      final categorySlugs = _selectedCategorySlugs.toList();
+      final categorySlugs = _selectedCategorySlugs.toList()..sort();
       final primaryCategory = categorySlugs.first;
 
-      final place = Place(
-        id: '',
-        name: title,
-        title: title,
-        street: street,
-        city: city,
-        state: state,
-        zip: zip,
-        category: primaryCategory,
-        categories: categorySlugs,
-        imageUrl: _imageUrl.trim(),
-        heroTag: _heroTag.trim().isEmpty ? title : _heroTag.trim(),
-        description: _description.trim(),
-        hoursByDay: _hoursByDay,
-        tags: tags,
-        mapQuery: _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
-        coords: geo,
-        featured: _featured,
-        active: true,
-        search: [
+      await FirebaseFirestore.instance.collection('attractions').add({
+        // Core identity
+        'name': title,
+        'title': title,
+
+        // Address
+        'street': street,
+        'city': city,
+        'state': state,
+        'zip': zip,
+
+        // Categories (store slugs)
+        'category': primaryCategory,
+        'categories': categorySlugs,
+
+        // Media / description
+        'imageUrl': imageUrl,
+        'heroTag': _heroTag.trim().isEmpty ? title : _heroTag.trim(),
+        'description': _description.trim(),
+
+        // Hours
+        'hours': null, // optional legacy field, keep null for now
+        'hoursByDay':
+            _hoursByDay.map((key, value) => MapEntry(key, value.toMap())),
+
+        // Tags / map
+        'tags': tags,
+        'mapQuery': _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
+
+        // Location / geo
+        'coords': geo,
+        'featured': _featured,
+        'active': true,
+
+        'stateId': _stateId ?? '',
+        'stateName': _stateName ?? '',
+        'metroId': _metroId ?? '',
+        'metroName': _metroName ?? '',
+        'areaId': _areaId ?? '',
+        'areaName': _areaName ?? '',
+
+        // Search helpers
+        'search': [
           title.toLowerCase(),
           city.toLowerCase(),
           primaryCategory.toLowerCase(),
@@ -221,16 +277,8 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
           if (state.isNotEmpty) state.toLowerCase(),
           if (zip.isNotEmpty) zip.toLowerCase(),
         ],
-        stateId: _stateId ?? '',
-        stateName: _stateName ?? '',
-        metroId: _metroId ?? '',
-        metroName: _metroName ?? '',
-        areaId: _areaId ?? '',
-        areaName: _areaName ?? '',
-      );
 
-      await FirebaseFirestore.instance.collection('attractions').add({
-        ...place.toMap(),
+        // Timestamps
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -260,8 +308,8 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
           children: [
             // Name / Title
             TextFormField(
+              controller: _nameController,
               decoration: const InputDecoration(labelText: 'Name / Title'),
-              onSaved: (v) => _name = v?.trim() ?? '',
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
@@ -269,9 +317,9 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
 
             // Image URL
             TextFormField(
+              controller: _imageUrlController,
               decoration: const InputDecoration(
                   labelText: 'Image URL (Unsplash or other)'),
-              onSaved: (v) => _imageUrl = v?.trim() ?? '',
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),

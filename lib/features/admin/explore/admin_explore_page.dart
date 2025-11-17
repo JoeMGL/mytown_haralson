@@ -32,7 +32,7 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('attractions')
-            .orderBy('name')
+            .orderBy('title')
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -234,9 +234,18 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
                   itemBuilder: (context, index) {
                     final place = filteredPlaces[index];
 
+                    // Fallback: if title is empty, use name
+                    final displayTitle =
+                        place.title.isNotEmpty ? place.title : place.name;
+
+                    // Category label: all categories if present, else primary
+                    final String categoryLabel = place.categories.isNotEmpty
+                        ? place.categories.join(', ')
+                        : place.category;
+
                     return ListTile(
                       title: Text(
-                        place.title,
+                        displayTitle,
                         style: TextStyle(
                           fontWeight: place.featured
                               ? FontWeight.bold
@@ -246,7 +255,7 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${place.city} • ${place.category}'),
+                          Text('${place.city} • $categoryLabel'),
                           if (place.hours != null && place.hours!.isNotEmpty)
                             Text(
                               place.hours!,
@@ -350,8 +359,6 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // If you have /admin/attractions/add route, you can use GoRouter here
-          // For now, assume AddAttractionPage is wired in the router
           context.push('/admin/attractions/add');
         },
         icon: const Icon(Icons.add),
