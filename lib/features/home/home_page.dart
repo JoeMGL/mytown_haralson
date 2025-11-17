@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '/core/location/location_provider.dart'; // adjust path if needed
+import '../../widgets/featured_places_section.dart'; // 👈 NEW
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -31,6 +32,7 @@ class HomePage extends ConsumerWidget {
             nearMeLabel: 'Haralson County',
             heroImageUrl:
                 'https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1600',
+            // no state/metro here, so no featured strip yet
           );
         }
 
@@ -52,6 +54,8 @@ class HomePage extends ConsumerWidget {
                 nearMeLabel: 'Haralson County',
                 heroImageUrl:
                     'https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1600',
+                stateId: stateId,
+                metroId: metroId,
               );
             }
 
@@ -69,15 +73,13 @@ class HomePage extends ConsumerWidget {
                 ? data['heroImageUrl'] as String
                 : 'https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1600';
 
-            // Optional: you could use slug or tagline later:
-            // final slug = data['slug'] as String?;
-            // final tagline = data['tagline'] as String?;
-
             return _buildScaffold(
               context,
               title: 'VISIT $metroName'.toUpperCase(),
               nearMeLabel: metroName,
               heroImageUrl: heroImageUrl,
+              stateId: stateId,
+              metroId: metroId,
             );
           },
         );
@@ -85,15 +87,14 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  /// Main scaffold UI. We just pass in the dynamic pieces:
-  /// - [title] for the app bar
-  /// - [nearMeLabel] for "Near Me in X"
-  /// - [heroImageUrl] for the header image
+  /// Main scaffold UI.
   Widget _buildScaffold(
     BuildContext context, {
     required String title,
     required String nearMeLabel,
     required String heroImageUrl,
+    String? stateId, // 👈 NEW
+    String? metroId, // 👈 NEW
   }) {
     return Scaffold(
       body: CustomScrollView(
@@ -163,11 +164,25 @@ class HomePage extends ConsumerWidget {
                   _nearMeCard(),
                   const SizedBox(height: 16),
 
-                  // Simple generic banner for now; later you can also drive this
-                  // off metro fields (e.g., tagline, featured attraction, etc.)
                   _genericBanner(nearMeLabel),
-
                   const SizedBox(height: 24),
+
+                  // ⭐ Featured Attractions (only if we know location)
+                  if (stateId != null && metroId != null) ...[
+                    FeaturedAttractionsSection(
+                      title: 'Featured Attractions',
+                      stateId: stateId,
+                      metroId: metroId,
+                      onPlaceTap: (place) {
+                        // Update route name if yours is different
+                        context.pushNamed(
+                          'exploreDetail',
+                          extra: place,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                  ],
                 ],
               ),
             ),
@@ -233,9 +248,6 @@ class HomePage extends ConsumerWidget {
         ),
       );
 
-  /// Simple banner for now – you can later make this metro-specific by:
-  /// - adding `bannerText` or `tagline` to the metro doc
-  /// - or looking up a featured attraction for that metro
   Widget _genericBanner(String nearMeLabel) {
     return Container(
       decoration: BoxDecoration(
@@ -251,8 +263,6 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  /// Turn a doc id like "atlanta-metro" or a path "states/ga/metros/atlanta-metro"
-  /// into "Atlanta Metro"
   String _prettyFromId(String raw) {
     final lastSegment = raw.split('/').last;
     return lastSegment
