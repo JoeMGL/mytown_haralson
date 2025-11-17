@@ -11,6 +11,17 @@ import '/core/location/location_provider.dart';
 // 🔑 This is the slug stored in sections.slug for the Explore/Attractions section
 const String kExploreSectionSlug = 'Explore';
 
+// Simple area model just for the filter UI
+class MetroArea {
+  final String id;
+  final String name;
+
+  const MetroArea({
+    required this.id,
+    required this.name,
+  });
+}
+
 class ExplorePage extends ConsumerStatefulWidget {
   const ExplorePage({super.key});
 
@@ -29,6 +40,14 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
   String? _selectedCategorySlug; // null = "All"
   bool _loadingCategories = true;
   String? _categoriesError;
+
+  // Areas within current metro
+  List<MetroArea> _areas = [];
+  String? _selectedAreaId; // null = "All Areas"
+  bool _loadingAreas = false;
+  String? _areasError;
+  String? _areasStateId; // last state we loaded areas for
+  String? _areasMetroId; // last metro we loaded areas for
 
   @override
   void initState() {
@@ -98,6 +117,66 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
     }
   }
 
+  // Load areas for the current state + metro
+  Future<void> _loadAreasForMetro(String stateId, String metroId) async {
+    // Avoid reloading for the same metro over and over
+    if (_areasStateId == stateId &&
+        _areasMetroId == metroId &&
+        _areas.isNotEmpty) {
+      return;
+    }
+
+    setState(() {
+      _loadingAreas = true;
+      _areasError = null;
+      _areasStateId = stateId;
+      _areasMetroId = metroId;
+    });
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('states')
+          .doc(stateId)
+          .collection('metros')
+          .doc(metroId)
+          .collection('areas')
+          .orderBy('name')
+          .get();
+
+      if (!mounted) return;
+
+      final list = snap.docs.map((doc) {
+        final data = doc.data();
+        final name = (data['name'] ?? doc.id) as String;
+        return MetroArea(id: doc.id, name: name);
+      }).toList();
+
+      setState(() {
+        _areas = list;
+        _loadingAreas = false;
+
+        // If current selected area isn't in the list anymore, clear it
+        if (_selectedAreaId != null &&
+            !_areas.any((a) => a.id == _selectedAreaId)) {
+          _selectedAreaId = null;
+        }
+      });
+    } catch (e, st) {
+      debugPrint('Error loading areas: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _areas = [];
+        _loadingAreas = false;
+        _areasError = e.toString();
+      });
+    }
+  }
+
+  // Resolve area name for a place (uses Place.areaName directly)
+  String _resolveAreaNameForPlace(Place p) {
+    return p.areaName; // may be empty string
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -132,6 +211,20 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           );
         }
 
+        // Trigger area load when metro changes
+        if (_areasStateId != stateId || _areasMetroId != metroId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _loadAreasForMetro(stateId, metroId);
+          });
+        }
+
+        // Base query by state + metro
+        Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+            .collection('attractions')
+            .where('stateId', isEqualTo: stateId)
+            .where('metroId', isEqualTo: metroId)
+            .orderBy('name'); // no areaId filter here → avoids composite index
+
         return Scaffold(
           appBar: AppBar(title: Text(title)),
           body: Column(
@@ -145,21 +238,22 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                   ),
                 ),
 
+              // Area chips (above category chips)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                child: _buildAreaChips(context),
+              ),
+
               // Category chips (dynamic)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                 child: _buildCategoryChips(context),
               ),
               const Divider(height: 1),
 
               Expanded(
                 child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('attractions')
-                      .where('stateId', isEqualTo: stateId)
-                      .where('metroId', isEqualTo: metroId)
-                      .orderBy('name')
-                      .snapshots(),
+                  stream: query.snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -183,6 +277,14 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                         .map((d) => Place.fromFirestore(d))
                         .where((p) => p.active)
                         .toList();
+
+                    // Filter by selected area on the client
+                    if (_selectedAreaId != null &&
+                        _selectedAreaId!.isNotEmpty) {
+                      places = places
+                          .where((p) => p.areaId == _selectedAreaId)
+                          .toList();
+                    }
 
                     // Filter by selected category (supports slug OR name, case-insensitive)
                     if (_selectedCategorySlug != null &&
@@ -222,6 +324,20 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                       }).toList();
                     }
 
+                    // Sort by area name, then by place name
+                    places.sort((a, b) {
+                      final areaA = _resolveAreaNameForPlace(a).toLowerCase();
+                      final areaB = _resolveAreaNameForPlace(b).toLowerCase();
+                      final cmpArea = areaA.compareTo(areaB);
+                      if (cmpArea != 0) return cmpArea;
+
+                      final nameA =
+                          (a.name.isNotEmpty ? a.name : a.title).toLowerCase();
+                      final nameB =
+                          (b.name.isNotEmpty ? b.name : b.title).toLowerCase();
+                      return nameA.compareTo(nameB);
+                    });
+
                     if (places.isEmpty) {
                       return const Center(
                         child: Text('No places match this filter.'),
@@ -258,6 +374,14 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                         final categoryLabel = _categories.isEmpty
                             ? place.category
                             : _resolveCategoryLabel(place);
+
+                        final areaName = _resolveAreaNameForPlace(place);
+
+                        final subtitleParts = <String>[
+                          if (areaName.isNotEmpty) areaName,
+                          if (categoryLabel.isNotEmpty) categoryLabel,
+                          if (place.city.isNotEmpty) place.city,
+                        ];
 
                         return Card(
                           clipBehavior: Clip.antiAlias,
@@ -328,17 +452,13 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                                           ],
                                         ),
                                         const SizedBox(height: 4),
-                                        Text(
-                                          [
-                                            if (categoryLabel.isNotEmpty)
-                                              categoryLabel,
-                                            if (place.city.isNotEmpty)
-                                              place.city,
-                                          ].join(' • '),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
+                                        if (subtitleParts.isNotEmpty)
+                                          Text(
+                                            subtitleParts.join(' • '),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall,
+                                          ),
                                         if (place.description.isNotEmpty)
                                           Padding(
                                             padding:
@@ -369,6 +489,60 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           ),
         );
       },
+    );
+  }
+
+  // Area chip row
+  Widget _buildAreaChips(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    if (_loadingAreas) {
+      return Row(
+        children: const [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 8),
+          Text('Loading areas...'),
+        ],
+      );
+    }
+
+    if (_areasError != null) {
+      return Text(
+        'Error loading areas: $_areasError',
+        style: TextStyle(color: cs.error),
+      );
+    }
+
+    if (_areas.isEmpty) {
+      // No areas configured for this metro
+      return const SizedBox.shrink();
+    }
+
+    return Wrap(
+      spacing: 8,
+      children: [
+        ChoiceChip(
+          label: const Text('All Areas'),
+          selected: _selectedAreaId == null,
+          onSelected: (_) {
+            setState(() => _selectedAreaId = null);
+          },
+        ),
+        ..._areas.map((area) {
+          final selected = _selectedAreaId == area.id;
+          return ChoiceChip(
+            label: Text(area.name),
+            selected: selected,
+            onSelected: (_) {
+              setState(() => _selectedAreaId = area.id);
+            },
+          );
+        }),
+      ],
     );
   }
 
