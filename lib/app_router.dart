@@ -16,7 +16,7 @@ import 'app_shell.dart';
 import 'features/admin/admin_shell.dart';
 
 // PUBLIC PAGES
-import 'features/home/home_page.dart';
+import 'features/user/home/home_page.dart';
 import 'features/user/explore/explore_page.dart';
 import 'features/user/explore/explore_detail_page.dart';
 import 'features/user/events/events_page.dart';

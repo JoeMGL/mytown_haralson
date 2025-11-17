@@ -6,6 +6,9 @@ import '/models/locations/state.dart';
 import '/models/locations/metro.dart';
 import '/models/locations/area.dart';
 
+// 👇 NEW – import your metro details page
+import '/features/admin/locations/admin_metro_detail_page.dart';
+
 class AdminLocationSetupPage extends StatefulWidget {
   const AdminLocationSetupPage({super.key});
 
@@ -23,6 +26,9 @@ class _AdminLocationSetupPageState extends State<AdminLocationSetupPage>
 
   // Controllers
   final TextEditingController _metroNameCtrl = TextEditingController();
+  final TextEditingController _metroTaglineCtrl = TextEditingController();
+  final TextEditingController _metroHeroImageCtrl = TextEditingController();
+
   final TextEditingController _stateNameCtrl = TextEditingController();
   final TextEditingController _areaNameCtrl = TextEditingController();
 
@@ -49,6 +55,8 @@ class _AdminLocationSetupPageState extends State<AdminLocationSetupPage>
   void dispose() {
     _tab.dispose();
     _metroNameCtrl.dispose();
+    _metroTaglineCtrl.dispose();
+    _metroHeroImageCtrl.dispose();
     _stateNameCtrl.dispose();
     _areaNameCtrl.dispose();
     super.dispose();
@@ -233,11 +241,32 @@ class _AdminLocationSetupPageState extends State<AdminLocationSetupPage>
           ),
           const SizedBox(height: 12),
 
+          // Metro name
           TextField(
             controller: _metroNameCtrl,
             decoration: const InputDecoration(
               labelText: 'Metro Name',
               hintText: 'e.g. Atlanta Metro, Haralson County',
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Optional tagline
+          TextField(
+            controller: _metroTaglineCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Tagline (optional)',
+              hintText: 'e.g. Explore Atlanta & beyond',
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Optional hero / banner image URL
+          TextField(
+            controller: _metroHeroImageCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Hero / Banner Image URL (optional)',
+              hintText: 'https://example.com/banner.jpg',
             ),
           ),
           const SizedBox(height: 12),
@@ -250,6 +279,8 @@ class _AdminLocationSetupPageState extends State<AdminLocationSetupPage>
                   ? null
                   : () async {
                       final metroName = _metroNameCtrl.text.trim();
+                      final tagline = _metroTaglineCtrl.text.trim();
+                      final heroImage = _metroHeroImageCtrl.text.trim();
                       final stateId = _selectedStateIdForMetro;
                       if (metroName.isEmpty || stateId == null) return;
 
@@ -262,8 +293,8 @@ class _AdminLocationSetupPageState extends State<AdminLocationSetupPage>
                           stateId: stateId,
                           name: metroName,
                           slug: slug,
-                          tagline: null,
-                          heroImageUrl: null,
+                          tagline: tagline.isEmpty ? null : tagline,
+                          heroImageUrl: heroImage.isEmpty ? null : heroImage,
                           isActive: true,
                           sortOrder: 0,
                         );
@@ -282,6 +313,8 @@ class _AdminLocationSetupPageState extends State<AdminLocationSetupPage>
                         );
 
                         _metroNameCtrl.clear();
+                        _metroTaglineCtrl.clear();
+                        _metroHeroImageCtrl.clear();
                       } catch (e) {
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -329,9 +362,35 @@ class _AdminLocationSetupPageState extends State<AdminLocationSetupPage>
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, i) {
                           final m = metros[i];
+
+                          final subtitleParts = <String>[
+                            m.slug,
+                            if (m.tagline != null &&
+                                m.tagline!.trim().isNotEmpty)
+                              m.tagline!.trim(),
+                            'id: ${m.id}',
+                            'active: ${m.isActive ? 'yes' : 'no'}',
+                            'sort: ${m.sortOrder}',
+                          ];
+
                           return ListTile(
                             title: Text(m.name),
-                            subtitle: Text(m.id),
+                            subtitle: Text(subtitleParts.join(' • ')),
+                            // 👇 NEW: tap row → open Metro detail page
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => AdminMetroDetailPage(
+                                    metro: m,
+                                  ),
+                                ),
+                              );
+                            },
+                            trailing: IconButton(
+                              icon: const Icon(Icons.edit),
+                              tooltip: 'Quick edit metro',
+                              onPressed: () => _showEditMetroDialog(m),
+                            ),
                           );
                         },
                       );
@@ -340,6 +399,139 @@ class _AdminLocationSetupPageState extends State<AdminLocationSetupPage>
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showEditMetroDialog(Metro metro) async {
+    final nameCtrl = TextEditingController(text: metro.name);
+    final slugCtrl = TextEditingController(text: metro.slug);
+    final taglineCtrl = TextEditingController(text: metro.tagline ?? '');
+    final heroCtrl = TextEditingController(text: metro.heroImageUrl ?? '');
+    final sortOrderCtrl =
+        TextEditingController(text: metro.sortOrder.toString());
+
+    bool isActive = metro.isActive;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Edit Metro • ${metro.name}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Metro Name',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: slugCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Slug',
+                    helperText: 'Auto-generated from name if left empty',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: taglineCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Tagline (optional)',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: heroCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Hero / Banner Image URL (optional)',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: sortOrderCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Sort Order',
+                    helperText: 'Lower numbers appear first',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Active'),
+                  value: isActive,
+                  onChanged: (v) {
+                    (context as Element).markNeedsBuild();
+                    isActive = v;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                var slug = slugCtrl.text.trim();
+                final tagline = taglineCtrl.text.trim();
+                final hero = heroCtrl.text.trim();
+                final sortOrderText = sortOrderCtrl.text.trim();
+
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(content: Text('Name cannot be empty')),
+                  );
+                  return;
+                }
+
+                if (slug.isEmpty) {
+                  slug = name.toLowerCase().replaceAll(' ', '-');
+                }
+
+                int sortOrder = metro.sortOrder;
+                if (sortOrderText.isNotEmpty) {
+                  final parsed = int.tryParse(sortOrderText);
+                  if (parsed != null) sortOrder = parsed;
+                }
+
+                try {
+                  await statesRef
+                      .doc(metro.stateId)
+                      .collection('metros')
+                      .doc(metro.id)
+                      .update({
+                    'name': name,
+                    'slug': slug,
+                    'tagline': tagline.isEmpty ? null : tagline,
+                    'heroImageUrl': hero.isEmpty ? null : hero,
+                    'isActive': isActive,
+                    'sortOrder': sortOrder,
+                  });
+
+                  if (!mounted) return;
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(content: Text('Metro "$name" updated ✅')),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    SnackBar(content: Text('Failed to update metro: $e')),
+                  );
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
     );
   }
 

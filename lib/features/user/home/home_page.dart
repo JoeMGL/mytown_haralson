@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '/core/location/location_provider.dart'; // adjust path if needed
-import '../../widgets/featured_places_section.dart'; // 👈 NEW
+import '../../widgets/featured_places_section.dart'; // 👈 keeps your featured section
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -73,13 +73,36 @@ class HomePage extends ConsumerWidget {
                 ? data['heroImageUrl'] as String
                 : 'https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1600';
 
-            return _buildScaffold(
-              context,
-              title: 'VISIT $metroName'.toUpperCase(),
-              nearMeLabel: metroName,
-              heroImageUrl: heroImageUrl,
-              stateId: stateId,
-              metroId: metroId,
+            final tagline = (data['tagline'] as String?)?.trim();
+
+            // 🔹 Now load banners for this metro
+            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: metroRef
+                  .collection('banners')
+                  .orderBy('sortOrder')
+                  .snapshots(),
+              builder: (context, bannerSnap) {
+                List<Map<String, dynamic>> banners = [];
+                if (bannerSnap.hasData && bannerSnap.data!.docs.isNotEmpty) {
+                  banners = bannerSnap.data!.docs
+                      .map((d) => d.data())
+                      .where(
+                        (b) => (b['isActive'] ?? true) == true,
+                      )
+                      .toList();
+                }
+
+                return _buildScaffold(
+                  context,
+                  title: 'VISIT $metroName'.toUpperCase(),
+                  nearMeLabel: metroName,
+                  heroImageUrl: heroImageUrl,
+                  tagline: tagline,
+                  stateId: stateId,
+                  metroId: metroId,
+                  banners: banners,
+                );
+              },
             );
           },
         );
@@ -93,8 +116,10 @@ class HomePage extends ConsumerWidget {
     required String title,
     required String nearMeLabel,
     required String heroImageUrl,
-    String? stateId, // 👈 NEW
-    String? metroId, // 👈 NEW
+    String? tagline,
+    String? stateId,
+    String? metroId,
+    List<Map<String, dynamic>> banners = const [],
   }) {
     return Scaffold(
       body: CustomScrollView(
@@ -107,15 +132,11 @@ class HomePage extends ConsumerWidget {
               titlePadding:
                   const EdgeInsetsDirectional.only(start: 16, bottom: 12),
               title: Text(title),
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    heroImageUrl,
-                    fit: BoxFit.cover,
-                  ),
-                  Container(color: Colors.black.withValues(alpha: 0.35)),
-                ],
+              background: _HomeHero(
+                heroImageUrl: heroImageUrl,
+                banners: banners,
+                title: title,
+                tagline: tagline,
               ),
             ),
           ),
@@ -174,7 +195,6 @@ class HomePage extends ConsumerWidget {
                       stateId: stateId,
                       metroId: metroId,
                       onPlaceTap: (place) {
-                        // Update route name if yours is different
                         context.pushNamed(
                           'exploreDetail',
                           extra: place,
@@ -266,9 +286,129 @@ class HomePage extends ConsumerWidget {
   String _prettyFromId(String raw) {
     final lastSegment = raw.split('/').last;
     return lastSegment
-        .split(RegExp(r'[_\- ]+'))
+        .split(RegExp(r'[_\\- ]+'))
         .where((part) => part.isNotEmpty)
         .map((part) => part[0].toUpperCase() + part.substring(1))
         .join(' ');
+  }
+}
+
+/// Hero background for the SliverAppBar
+/// - Uses metro banners if available
+/// - Falls back to the static hero image
+class _HomeHero extends StatefulWidget {
+  const _HomeHero({
+    required this.heroImageUrl,
+    required this.banners,
+    required this.title,
+    this.tagline,
+  });
+
+  final String heroImageUrl;
+  final List<Map<String, dynamic>> banners;
+  final String title;
+  final String? tagline;
+
+  @override
+  State<_HomeHero> createState() => _HomeHeroState();
+}
+
+class _HomeHeroState extends State<_HomeHero> {
+  final PageController _pageController = PageController();
+  int _current = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hasBanners = widget.banners.isNotEmpty;
+
+    Widget buildImage(Map<String, dynamic>? banner) {
+      final imageUrl = banner != null
+          ? (banner['imageUrl'] as String? ?? widget.heroImageUrl)
+          : widget.heroImageUrl;
+
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            imageUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              color: cs.surfaceVariant,
+              alignment: Alignment.center,
+              child: const Icon(Icons.image_not_supported),
+            ),
+          ),
+          Container(color: Colors.black.withValues(alpha: 0.35)),
+          // Optional tagline overlay at bottom-left
+          if (widget.tagline != null && widget.tagline!.trim().isNotEmpty)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 16,
+              child: Text(
+                widget.tagline!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    if (!hasBanners) {
+      // Just single hero image
+      return buildImage(null);
+    }
+
+    final banners = widget.banners;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageView.builder(
+          controller: _pageController,
+          itemCount: banners.length,
+          onPageChanged: (index) {
+            setState(() => _current = index);
+          },
+          itemBuilder: (context, index) {
+            final b = banners[index];
+            return buildImage(b);
+          },
+        ),
+        // Dots indicator
+        Positioned(
+          bottom: 8,
+          right: 16,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: List.generate(banners.length, (i) {
+              final isActive = _current == i;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: isActive ? 10 : 6,
+                height: isActive ? 10 : 6,
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.5),
+                  shape: BoxShape.circle,
+                ),
+              );
+            }),
+          ),
+        ),
+      ],
+    );
   }
 }
