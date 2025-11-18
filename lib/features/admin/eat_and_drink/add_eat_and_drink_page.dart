@@ -2,7 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/eat_and_drink.dart';
+import '../../../models/category.dart';
 import '../../../widgets/location_selector.dart';
+import '../../../widgets/image_editor_page.dart'; // 👈 use your widget
+
+/// Must match the `section` value in your `categories` docs
+/// for the Eat & Drink section.
+const String kEatSectionSlug = 'eatAndDrink';
 
 class AddEatAndDrinkPage extends StatefulWidget {
   const AddEatAndDrinkPage({super.key});
@@ -14,9 +20,13 @@ class AddEatAndDrinkPage extends StatefulWidget {
 class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
   final _form = GlobalKey<FormState>();
 
-  String _name = '';
+  // Controllers for fields that must round-trip perfectly
+  late TextEditingController _nameController;
+  late TextEditingController _imageUrlController;
+
+  // Core fields
   String _city = 'Tallapoosa';
-  String _category = 'Restaurant';
+  String _category = ''; // category slug from Firestore
   String _description = '';
   String _hours = '';
   String _phone = '';
@@ -34,15 +44,94 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
   String? _areaId;
   String? _areaName;
 
-  static const _categories = [
-    'Restaurant',
-    'Bar / Pub',
-    'Coffee / Cafe',
-    'Bakery / Sweets',
-    'Brewery / Winery',
-    'Food Truck',
-    'Other',
-  ];
+  // Dynamic categories
+  List<Category> _categories = [];
+  bool _loadingCategories = true;
+  String? _categoriesError;
+
+  // Images
+  List<String> _imageUrls = []; // gallery
+  String _bannerImageUrl = ''; // hero / banner
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController();
+    _imageUrlController = TextEditingController();
+    _loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _imageUrlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('categories')
+          .where('section', isEqualTo: kEatSectionSlug)
+          .orderBy('sortOrder')
+          .get();
+
+      final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      setState(() {
+        _categories = cats;
+        _loadingCategories = false;
+
+        if (_categories.isNotEmpty) {
+          _category = _categories.first.slug;
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _categoriesError = 'Error loading categories: $e';
+        _loadingCategories = false;
+      });
+    }
+  }
+
+  Future<void> _editGalleryImages() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => ImageUrlsEditorPage(
+          initialUrls: _imageUrls,
+          title: 'Gallery images',
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _imageUrls = result;
+        if (_imageUrls.isNotEmpty && _imageUrlController.text.isEmpty) {
+          _imageUrlController.text = _imageUrls.first;
+        }
+      });
+    }
+  }
+
+  Future<void> _editBannerImage() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => ImageUrlsEditorPage(
+          initialUrls:
+              _bannerImageUrl.isEmpty ? <String>[] : <String>[_bannerImageUrl],
+          title: 'Banner image',
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _bannerImageUrl =
+            result.isNotEmpty ? result.first : ''; // clear if empty list
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,22 +146,54 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Name
               TextFormField(
+                controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Name'),
-                onSaved: (v) => _name = v?.trim() ?? '',
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v ?? _category),
-              ),
+
+              // Category (dynamic from Firestore)
+              if (_loadingCategories)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(),
+                )
+              else if (_categoriesError != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    _categoriesError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                )
+              else
+                DropdownButtonFormField<String>(
+                  value: _category.isEmpty ? null : _category,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: _categories
+                      .map(
+                        (c) => DropdownMenuItem<String>(
+                          value: c.slug,
+                          child: Text(c.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _category = v);
+                  },
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Please select a category'
+                      : null,
+                ),
               const SizedBox(height: 12),
+
+              // City
               TextFormField(
                 initialValue: _city,
                 decoration: const InputDecoration(labelText: 'City'),
@@ -80,6 +201,8 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
                 textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 16),
+
+              // Location selector
               LocationSelector(
                 initialStateId: _stateId,
                 initialMetroId: _metroId,
@@ -95,7 +218,46 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
                   });
                 },
               ),
+              const SizedBox(height: 16),
+
+              // Gallery images
+              ListTile(
+                title: const Text('Gallery images'),
+                subtitle: Text(
+                  _imageUrls.isEmpty
+                      ? 'Tap to add images'
+                      : '${_imageUrls.length} image(s) selected',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _editGalleryImages,
+              ),
+              const SizedBox(height: 8),
+
+              // Banner image
+              ListTile(
+                title: const Text('Banner / hero image'),
+                subtitle: Text(
+                  _bannerImageUrl.isEmpty
+                      ? 'Tap to choose banner image'
+                      : 'Banner image selected',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _editBannerImage,
+              ),
               const SizedBox(height: 12),
+
+              // Main image URL
+              TextFormField(
+                controller: _imageUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Main image URL',
+                  hintText: 'https://...',
+                ),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 12),
+
+              // Description
               TextFormField(
                 decoration:
                     const InputDecoration(labelText: 'Description (short)'),
@@ -103,6 +265,8 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
                 onSaved: (v) => _description = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Hours (simple text for now)
               TextFormField(
                 decoration: const InputDecoration(
                   labelText: 'Hours',
@@ -111,12 +275,16 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
                 onSaved: (v) => _hours = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Phone
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Phone'),
                 keyboardType: TextInputType.phone,
                 onSaved: (v) => _phone = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Website
               TextFormField(
                 decoration: const InputDecoration(
                   labelText: 'Website',
@@ -126,6 +294,8 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
                 onSaved: (v) => _website = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Map query
               TextFormField(
                 decoration: const InputDecoration(
                   labelText: 'Maps query (optional)',
@@ -134,12 +304,16 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
                 onSaved: (v) => _mapQuery = v?.trim() ?? '',
               ),
               const SizedBox(height: 16),
+
+              // Featured toggle
               SwitchListTile(
                 title: const Text('Featured'),
                 value: _featured,
                 onChanged: (v) => setState(() => _featured = v),
               ),
               const SizedBox(height: 24),
+
+              // Save button
               FilledButton.icon(
                 onPressed: _saving ? null : _save,
                 icon: _saving
@@ -175,13 +349,16 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
     setState(() => _saving = true);
 
     try {
+      final name = _nameController.text.trim();
+      final imageUrl = _imageUrlController.text.trim();
+
       final place = EatAndDrink(
         id: '',
-        name: _name.trim(),
+        name: name,
         city: _city.trim(),
-        category: _category,
+        category: _category, // category slug
         description: _description.trim(),
-        imageUrl: '', // can be set later via separate flow
+        imageUrl: imageUrl,
         heroTag: '',
         hours: _hours.trim().isEmpty ? null : _hours.trim(),
         tags: const [],
@@ -192,9 +369,13 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
         featured: _featured,
         active: true,
         search: [
-          _name.toLowerCase(),
+          name.toLowerCase(),
           _city.toLowerCase(),
           _category.toLowerCase(),
+          if (_stateName != null) _stateName!.toLowerCase(),
+          if (_metroName != null) _metroName!.toLowerCase(),
+          if (_areaName != null && _areaName!.isNotEmpty)
+            _areaName!.toLowerCase(),
         ],
         stateId: _stateId ?? '',
         stateName: _stateName ?? '',
@@ -206,6 +387,8 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
 
       await FirebaseFirestore.instance.collection('eatAndDrink').add({
         ...place.toMap(),
+        'galleryImageUrls': _imageUrls,
+        'bannerImageUrl': _bannerImageUrl.isEmpty ? null : _bannerImageUrl,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });

@@ -336,7 +336,7 @@ class _AdminEatAndDrinkPageState extends State<AdminEatAndDrinkPage> {
                             icon: const Icon(Icons.edit),
                             onPressed: () {
                               context.push(
-                                '/admin/dining/edit',
+                                '/admin/eat/edit',
                                 extra: place,
                               );
                             },

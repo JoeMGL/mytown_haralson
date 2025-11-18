@@ -2,7 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/eat_and_drink.dart';
+import '../../../models/category.dart';
 import '../../../widgets/location_selector.dart';
+import '../../../widgets/image_editor_page.dart';
+
+const String kEatSectionSlug = 'eatAndDrink';
 
 class EditEatAndDrinkPage extends StatefulWidget {
   const EditEatAndDrinkPage({
@@ -21,7 +25,7 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
 
   late String _name;
   late String _city;
-  late String _category;
+  late String _category; // slug or legacy name (we normalize on load)
   late String _description;
   late String _hours;
   late String _phone;
@@ -40,15 +44,15 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
   String? _areaId;
   String? _areaName;
 
-  static const _categories = [
-    'Restaurant',
-    'Bar / Pub',
-    'Coffee / Cafe',
-    'Bakery / Sweets',
-    'Brewery / Winery',
-    'Food Truck',
-    'Other',
-  ];
+  // Dynamic categories
+  List<Category> _categories = [];
+  bool _loadingCategories = true;
+  String? _categoriesError;
+
+  // Images
+  late TextEditingController _imageUrlController;
+  List<String> _imageUrls = [];
+  String _bannerImageUrl = '';
 
   @override
   void initState() {
@@ -57,8 +61,7 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
 
     _name = p.name;
     _city = p.city;
-    _category =
-        _categories.contains(p.category) ? p.category : _categories.first;
+    _category = p.category; // might be name or slug, we’ll fix after load
     _description = p.description;
     _hours = p.hours ?? '';
     _phone = p.phone ?? '';
@@ -74,6 +77,99 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
     _metroName = p.metroName;
     _areaId = p.areaId.isNotEmpty ? p.areaId : null;
     _areaName = p.areaName;
+
+    _imageUrlController = TextEditingController(text: p.imageUrl);
+
+    _imageUrls = []; // if you later add galleryImageUrls to model, hydrate here
+    _bannerImageUrl = '';
+
+    _loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _imageUrlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('categories')
+          .where('section', isEqualTo: kEatSectionSlug)
+          .orderBy('sortOrder')
+          .get();
+
+      final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      // Normalize legacy category values:
+      // - If stored value matches a category name, use that slug
+      // - Else if it matches a slug, keep it
+      // - Else fall back to first slug
+      String normalized = _category;
+      if (cats.isNotEmpty) {
+        final byName = {for (final c in cats) c.name: c.slug};
+        final slugSet = {for (final c in cats) c.slug};
+
+        if (byName.containsKey(_category)) {
+          normalized = byName[_category]!;
+        } else if (!slugSet.contains(_category)) {
+          normalized = cats.first.slug;
+        }
+      } else {
+        normalized = '';
+      }
+
+      setState(() {
+        _categories = cats;
+        _category = normalized;
+        _loadingCategories = false;
+      });
+    } catch (e) {
+      setState(() {
+        _categoriesError = 'Error loading categories: $e';
+        _loadingCategories = false;
+      });
+    }
+  }
+
+  Future<void> _editGalleryImages() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => ImageUrlsEditorPage(
+          initialUrls: _imageUrls,
+          title: 'Gallery images',
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _imageUrls = result;
+        if (_imageUrls.isNotEmpty && _imageUrlController.text.isEmpty) {
+          _imageUrlController.text = _imageUrls.first;
+        }
+      });
+    }
+  }
+
+  Future<void> _editBannerImage() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => ImageUrlsEditorPage(
+          initialUrls: _bannerImageUrl.isEmpty
+              ? const <String>[]
+              : <String>[_bannerImageUrl],
+          title: 'Banner image',
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _bannerImageUrl = result.isNotEmpty ? result.first : '';
+      });
+    }
   }
 
   @override
@@ -89,6 +185,7 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Name
               TextFormField(
                 initialValue: _name,
                 decoration: const InputDecoration(labelText: 'Name'),
@@ -97,17 +194,43 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _categories.contains(_category)
-                    ? _category
-                    : _categories.first,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v ?? _category),
-              ),
+
+              // Category
+              if (_loadingCategories)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(),
+                )
+              else if (_categoriesError != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    _categoriesError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                )
+              else
+                DropdownButtonFormField<String>(
+                  value: _category.isEmpty ? null : _category,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: _categories
+                      .map(
+                        (c) => DropdownMenuItem<String>(
+                          value: c.slug,
+                          child: Text(c.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _category = v);
+                  },
+                ),
               const SizedBox(height: 12),
+
+              // City
               TextFormField(
                 initialValue: _city,
                 decoration: const InputDecoration(labelText: 'City'),
@@ -115,6 +238,8 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                 textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 16),
+
+              // Location
               LocationSelector(
                 initialStateId: _stateId,
                 initialMetroId: _metroId,
@@ -130,7 +255,46 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                   });
                 },
               ),
+              const SizedBox(height: 16),
+
+              // Gallery images
+              ListTile(
+                title: const Text('Gallery images'),
+                subtitle: Text(
+                  _imageUrls.isEmpty
+                      ? 'Tap to add images'
+                      : '${_imageUrls.length} image(s) selected',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _editGalleryImages,
+              ),
+              const SizedBox(height: 8),
+
+              // Banner image
+              ListTile(
+                title: const Text('Banner / hero image'),
+                subtitle: Text(
+                  _bannerImageUrl.isEmpty
+                      ? 'Tap to choose banner image'
+                      : 'Banner image selected',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _editBannerImage,
+              ),
               const SizedBox(height: 12),
+
+              // Main image URL
+              TextFormField(
+                controller: _imageUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Main image URL',
+                  hintText: 'https://...',
+                ),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 12),
+
+              // Description
               TextFormField(
                 initialValue: _description,
                 decoration:
@@ -139,6 +303,8 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                 onSaved: (v) => _description = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Hours
               TextFormField(
                 initialValue: _hours,
                 decoration: const InputDecoration(
@@ -148,6 +314,8 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                 onSaved: (v) => _hours = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Phone
               TextFormField(
                 initialValue: _phone,
                 decoration: const InputDecoration(labelText: 'Phone'),
@@ -155,6 +323,8 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                 onSaved: (v) => _phone = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Website
               TextFormField(
                 initialValue: _website,
                 decoration: const InputDecoration(
@@ -165,6 +335,8 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                 onSaved: (v) => _website = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Map query
               TextFormField(
                 initialValue: _mapQuery,
                 decoration: const InputDecoration(
@@ -174,6 +346,8 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                 onSaved: (v) => _mapQuery = v?.trim() ?? '',
               ),
               const SizedBox(height: 16),
+
+              // Toggles
               SwitchListTile(
                 title: const Text('Featured'),
                 value: _featured,
@@ -185,6 +359,7 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                 onChanged: (v) => setState(() => _active = v),
               ),
               const SizedBox(height: 24),
+
               FilledButton.icon(
                 onPressed: _saving ? null : _save,
                 icon: _saving
@@ -220,13 +395,15 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
     setState(() => _saving = true);
 
     try {
+      final imageUrl = _imageUrlController.text.trim();
+
       await FirebaseFirestore.instance
           .collection('eatAndDrink')
           .doc(widget.place.id)
           .update({
         'name': _name.trim(),
         'city': _city.trim(),
-        'category': _category,
+        'category': _category, // now normalized to slug
         'description': _description.trim(),
         'hours': _hours.trim().isEmpty ? null : _hours.trim(),
         'phone': _phone.trim().isEmpty ? null : _phone.trim(),
@@ -240,10 +417,17 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
         'metroName': _metroName ?? '',
         'areaId': _areaId,
         'areaName': _areaName ?? '',
+        'imageUrl': imageUrl,
+        'galleryImageUrls': _imageUrls,
+        'bannerImageUrl': _bannerImageUrl.isEmpty ? null : _bannerImageUrl,
         'search': [
           _name.toLowerCase(),
           _city.toLowerCase(),
           _category.toLowerCase(),
+          if (_stateName != null) _stateName!.toLowerCase(),
+          if (_metroName != null) _metroName!.toLowerCase(),
+          if (_areaName != null && _areaName!.isNotEmpty)
+            _areaName!.toLowerCase(),
         ],
         'updatedAt': FieldValue.serverTimestamp(),
       });
