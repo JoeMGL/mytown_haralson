@@ -20,8 +20,10 @@ class AddClubPage extends StatefulWidget {
 class _AddClubPageState extends State<AddClubPage> {
   final _form = GlobalKey<FormState>();
 
+  // Controllers for fields that must round-trip perfectly
+  late TextEditingController _nameController;
+
   // Club fields
-  String _name = '';
   String _category = ''; // will be set after categories load
 
   // Images
@@ -65,8 +67,15 @@ class _AddClubPageState extends State<AddClubPage> {
   @override
   void initState() {
     super.initState();
+    _nameController = TextEditingController();
     _loadStates();
     _loadCategories(); // load club categories from Firestore
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   // ─────────────────────────────
@@ -225,7 +234,16 @@ class _AddClubPageState extends State<AddClubPage> {
       return;
     }
 
-    _form.currentState!.save();
+    _form.currentState!.save(); // still needed for the non-controller fields
+
+    // 🔐 Always get the latest name from the controller
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a name for this club.')),
+      );
+      return;
+    }
 
     final trimmedBanner = _bannerImageUrl.trim();
 
@@ -241,7 +259,7 @@ class _AddClubPageState extends State<AddClubPage> {
 
     try {
       await FirebaseFirestore.instance.collection('clubs').add({
-        'name': _name.trim(),
+        'name': name,
         // Store the selected category name (from Firebase)
         'category': _category,
 
@@ -313,8 +331,8 @@ class _AddClubPageState extends State<AddClubPage> {
             children: [
               // Name
               TextFormField(
+                controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Name'),
-                onSaved: (v) => _name = v ?? '',
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),

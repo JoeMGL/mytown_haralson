@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '/core/location/location_provider.dart'; // adjust path if needed
 import '../../../widgets/featured_places_section.dart'; // 👈 keeps your featured section
 
+import '../../../widgets/featured_clubs_section.dart';
+
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
@@ -201,7 +203,19 @@ class HomePage extends ConsumerWidget {
                         );
                       },
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
+                    // 🧩 Featured Clubs & Groups
+                    FeaturedClubsSection(
+                      title: 'Clubs & Groups',
+                      stateId: stateId,
+                      metroId: metroId,
+                      onClubTap: (club) {
+                        context.pushNamed(
+                          'clubDetail', // whatever you named the route
+                          extra: club,
+                        );
+                      },
+                    ),
                   ],
                 ],
               ),

@@ -24,7 +24,9 @@ class EditClubPage extends StatefulWidget {
 class _EditClubPageState extends State<EditClubPage> {
   final _form = GlobalKey<FormState>();
 
-  late String _name;
+  // 🔹 Controller for name so it always round-trips correctly
+  late TextEditingController _nameController;
+
   late String _category;
   late String _meetingLocation;
   late String _meetingSchedule;
@@ -66,7 +68,9 @@ class _EditClubPageState extends State<EditClubPage> {
     super.initState();
 
     final c = widget.club;
-    _name = c.name;
+
+    _nameController = TextEditingController(text: c.name);
+
     _category = c.category; // we'll validate against fetched categories
     _meetingLocation = c.meetingLocation;
     _meetingSchedule = c.meetingSchedule;
@@ -97,6 +101,12 @@ class _EditClubPageState extends State<EditClubPage> {
     _zip = c.zip;
 
     _loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   // ─────────────────────────────
@@ -160,6 +170,15 @@ class _EditClubPageState extends State<EditClubPage> {
 
     _form.currentState!.save();
 
+    // ✅ Always read the latest name from the controller
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a name for this club.')),
+      );
+      return;
+    }
+
     if (_stateId == null || _metroId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -193,7 +212,7 @@ class _EditClubPageState extends State<EditClubPage> {
           .collection('clubs')
           .doc(widget.club.id)
           .update({
-        'name': _name.trim(),
+        'name': name, // 🔥 updated name from controller
         // Category is the selected name from Firestore-backed list
         'category': _category,
 
@@ -250,6 +269,7 @@ class _EditClubPageState extends State<EditClubPage> {
 
     return Scaffold(
       appBar: AppBar(
+        // This title uses the original name; the field below is editable.
         title: Text('Edit Club: ${widget.club.name}'),
       ),
       body: AbsorbPointer(
@@ -261,9 +281,8 @@ class _EditClubPageState extends State<EditClubPage> {
             children: [
               // Name
               TextFormField(
-                initialValue: _name,
+                controller: _nameController,
                 decoration: const InputDecoration(labelText: 'Name'),
-                onSaved: (v) => _name = v ?? '',
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),

@@ -4,7 +4,33 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Club {
   final String id;
 
-  // Location (logical location selection)
+  // Core
+  final String name;
+  final String category;
+
+  // Images
+  final List<String> imageUrls;
+  final String imageUrl; // primary image (first gallery image)
+  final String bannerImageUrl; // hero / cover
+
+  // Meeting info
+  final String meetingLocation;
+  final String meetingSchedule;
+
+  // Contact
+  final String contactName;
+  final String contactEmail;
+  final String contactPhone;
+
+  // Links
+  final String website;
+  final String facebook;
+
+  // Flags
+  final bool featured;
+  final bool active;
+
+  // Location (logical)
   final String stateId;
   final String stateName;
   final String metroId;
@@ -12,39 +38,29 @@ class Club {
   final String areaId;
   final String areaName;
 
-  // Address (postal)
+  // Postal address parts + combined
   final String street;
   final String city;
-  final String state; // postal state (GA, AL, etc.)
+  final String state;
   final String zip;
-  final String address; // combined / legacy formatted address
-
-  // Core fields
-  final String name;
-  final String category;
-
-  // Images
-  final List<String> imageUrls; // gallery
-  final String bannerImageUrl; // banner / hero
-
-  final String meetingLocation;
-  final String meetingSchedule;
-
-  final String contactName;
-  final String contactEmail;
-  final String contactPhone;
-
-  final String website;
-  final String facebook;
-
-  final bool featured;
-  final bool active;
-
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
+  final String address;
 
   Club({
     required this.id,
+    required this.name,
+    required this.category,
+    required this.imageUrls,
+    required this.imageUrl,
+    required this.bannerImageUrl,
+    required this.meetingLocation,
+    required this.meetingSchedule,
+    required this.contactName,
+    required this.contactEmail,
+    required this.contactPhone,
+    required this.website,
+    required this.facebook,
+    required this.featured,
+    required this.active,
     required this.stateId,
     required this.stateName,
     required this.metroId,
@@ -56,150 +72,114 @@ class Club {
     required this.state,
     required this.zip,
     required this.address,
-    required this.name,
-    required this.category,
-    required this.imageUrls,
-    required this.bannerImageUrl,
-    required this.meetingLocation,
-    required this.meetingSchedule,
-    required this.contactName,
-    required this.contactEmail,
-    required this.contactPhone,
-    required this.website,
-    required this.facebook,
-    required this.featured,
-    required this.active,
-    required this.createdAt,
-    required this.updatedAt,
   });
 
-  /// Firestore → Model
-  factory Club.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-
-    // Multi-images (with legacy support)
-    List<String> parsedImageUrls = [];
-    final rawImageUrls = data['imageUrls'];
-
-    if (rawImageUrls is List) {
-      parsedImageUrls = rawImageUrls
-          .where((e) => e != null)
-          .map((e) => e.toString())
-          .where((e) => e.trim().isNotEmpty)
-          .toList();
+  // Helper to safely convert dynamic -> List<String>
+  static List<String> _stringList(dynamic value) {
+    if (value is List) {
+      return value.map((e) => e.toString()).toList();
     }
+    return const [];
+  }
 
-    if (parsedImageUrls.isEmpty && data['imageUrl'] != null) {
-      final legacy = data['imageUrl'].toString().trim();
-      if (legacy.isNotEmpty) {
-        parsedImageUrls = [legacy];
-      }
-    }
-
-    // Banner: prefer explicit bannerImageUrl, fallback to imageUrl / first gallery image
-    String banner = (data['bannerImageUrl'] ?? '').toString().trim();
-    if (banner.isEmpty && data['imageUrl'] != null) {
-      banner = data['imageUrl'].toString().trim();
-    }
-    if (banner.isEmpty && parsedImageUrls.isNotEmpty) {
-      banner = parsedImageUrls.first;
-    }
-
-    final street = data['street'] ?? '';
-    final city = data['city'] ?? '';
-    final state = data['state'] ?? '';
-    final zip = data['zip'] ?? '';
-
-    // Legacy combined address (or derive from parts if missing)
-    String addr = data['address'] ?? '';
-    if ((addr as String).trim().isEmpty) {
-      final parts = [street, city, state, zip]
-          .map((e) => e.toString().trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
-      addr = parts.join(', ');
-    }
-
+  /// Used when you already have a typed DocumentSnapshot
+  factory Club.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
     return Club(
       id: doc.id,
-      stateId: data['stateId'] ?? '',
-      stateName: data['stateName'] ?? '',
-      metroId: data['metroId'] ?? '',
-      metroName: data['metroName'] ?? '',
-      areaId: data['areaId'] ?? '',
-      areaName: data['areaName'] ?? '',
-      street: street,
-      city: city,
-      state: state,
-      zip: zip,
-      address: addr,
-      name: data['name'] ?? '',
-      category: data['category'] ?? '',
-      imageUrls: parsedImageUrls,
-      bannerImageUrl: banner,
-      meetingLocation: data['meetingLocation'] ?? '',
-      meetingSchedule: data['meetingSchedule'] ?? '',
-      contactName: data['contactName'] ?? '',
-      contactEmail: data['contactEmail'] ?? '',
-      contactPhone: data['contactPhone'] ?? '',
-      website: data['website'] ?? '',
-      facebook: data['facebook'] ?? '',
-      featured: data['featured'] ?? false,
-      active: data['active'] ?? true,
-      createdAt: _toDate(data['createdAt']),
-      updatedAt: _toDate(data['updatedAt']),
+      name: (data['name'] as String?)?.trim() ?? '',
+      category: (data['category'] as String?)?.trim() ?? '',
+
+      // Images
+      imageUrls: _stringList(data['imageUrls']),
+      imageUrl: (data['imageUrl'] as String?)?.trim() ?? '',
+      bannerImageUrl: (data['bannerImageUrl'] as String?)?.trim() ?? '',
+
+      // Meeting info
+      meetingLocation: (data['meetingLocation'] as String?)?.trim() ?? '',
+      meetingSchedule: (data['meetingSchedule'] as String?)?.trim() ?? '',
+
+      // Contact
+      contactName: (data['contactName'] as String?)?.trim() ?? '',
+      contactEmail: (data['contactEmail'] as String?)?.trim() ?? '',
+      contactPhone: (data['contactPhone'] as String?)?.trim() ?? '',
+
+      // Links
+      website: (data['website'] as String?)?.trim() ?? '',
+      facebook: (data['facebook'] as String?)?.trim() ?? '',
+
+      // Flags
+      featured: data['featured'] as bool? ?? false,
+      active: data['active'] as bool? ?? true,
+
+      // Location (logical)
+      stateId: (data['stateId'] as String?) ?? '',
+      stateName: (data['stateName'] as String?) ?? '',
+      metroId: (data['metroId'] as String?) ?? '',
+      metroName: (data['metroName'] as String?) ?? '',
+      areaId: (data['areaId'] as String?) ?? '',
+      areaName: (data['areaName'] as String?) ?? '',
+
+      // Postal address
+      street: (data['street'] as String?)?.trim() ?? '',
+      city: (data['city'] as String?)?.trim() ?? '',
+      state: (data['state'] as String?)?.trim() ?? '',
+      zip: (data['zip'] as String?)?.trim() ?? '',
+      address: (data['address'] as String?)?.trim() ?? '',
     );
   }
 
-  /// Model → Firestore map
-  Map<String, dynamic> toMap() {
-    final combinedAddress = address.isNotEmpty
-        ? address
-        : [street, city, state, zip]
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .join(', ');
+  /// Flexible factory so existing code like `Club.fromFirestore(...)` still works.
+  ///
+  /// Supports:
+  ///   Club.fromFirestore(doc)                // DocumentSnapshot
+  ///   Club.fromFirestore(map, 'docId')       // Map + explicit id
+  factory Club.fromFirestore(dynamic source, [String? explicitId]) {
+    if (source is DocumentSnapshot<Map<String, dynamic>>) {
+      return Club.fromDoc(source);
+    }
 
-    return {
-      'stateId': stateId,
-      'stateName': stateName,
-      'metroId': metroId,
-      'metroName': metroName,
-      'areaId': areaId,
-      'areaName': areaName,
+    if (source is DocumentSnapshot) {
+      final doc = source as DocumentSnapshot<Map<String, dynamic>>;
+      return Club.fromDoc(doc);
+    }
 
-      // Address parts
-      'street': street,
-      'city': city,
-      'state': state,
-      'zip': zip,
-      'address': combinedAddress,
+    if (source is Map<String, dynamic>) {
+      final data = source;
+      final id = explicitId ?? '';
 
-      'name': name,
-      'category': category,
+      return Club(
+        id: id,
+        name: (data['name'] as String?)?.trim() ?? '',
+        category: (data['category'] as String?)?.trim() ?? '',
+        imageUrls: _stringList(data['imageUrls']),
+        imageUrl: (data['imageUrl'] as String?)?.trim() ?? '',
+        bannerImageUrl: (data['bannerImageUrl'] as String?)?.trim() ?? '',
+        meetingLocation: (data['meetingLocation'] as String?)?.trim() ?? '',
+        meetingSchedule: (data['meetingSchedule'] as String?)?.trim() ?? '',
+        contactName: (data['contactName'] as String?)?.trim() ?? '',
+        contactEmail: (data['contactEmail'] as String?)?.trim() ?? '',
+        contactPhone: (data['contactPhone'] as String?)?.trim() ?? '',
+        website: (data['website'] as String?)?.trim() ?? '',
+        facebook: (data['facebook'] as String?)?.trim() ?? '',
+        featured: data['featured'] as bool? ?? false,
+        active: data['active'] as bool? ?? true,
+        stateId: (data['stateId'] as String?) ?? '',
+        stateName: (data['stateName'] as String?) ?? '',
+        metroId: (data['metroId'] as String?) ?? '',
+        metroName: (data['metroName'] as String?) ?? '',
+        areaId: (data['areaId'] as String?) ?? '',
+        areaName: (data['areaName'] as String?) ?? '',
+        street: (data['street'] as String?)?.trim() ?? '',
+        city: (data['city'] as String?)?.trim() ?? '',
+        state: (data['state'] as String?)?.trim() ?? '',
+        zip: (data['zip'] as String?)?.trim() ?? '',
+        address: (data['address'] as String?)?.trim() ?? '',
+      );
+    }
 
-      // images
-      'imageUrls': imageUrls,
-      'imageUrl': imageUrls.isNotEmpty ? imageUrls.first : '',
-      'bannerImageUrl': bannerImageUrl,
-
-      'meetingLocation': meetingLocation,
-      'meetingSchedule': meetingSchedule,
-      'contactName': contactName,
-      'contactEmail': contactEmail,
-      'contactPhone': contactPhone,
-      'website': website,
-      'facebook': facebook,
-      'featured': featured,
-      'active': active,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
-    };
-  }
-
-  static DateTime? _toDate(dynamic value) {
-    if (value == null) return null;
-    if (value is Timestamp) return value.toDate();
-    return value as DateTime?;
+    throw ArgumentError(
+      'Unsupported source type for Club.fromFirestore: ${source.runtimeType}',
+    );
   }
 }
