@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../widgets/location_selector.dart';
+import '../../../models/category.dart';
+import '../../../widgets/image_editor_page.dart';
+
+/// Must match the `section` value in your `sections` / `categories` docs
+/// for the Clubs / Groups section.
+const String kClubsSectionSlug = 'clubs';
 
 class AddClubPage extends StatefulWidget {
   const AddClubPage({super.key});
@@ -16,7 +22,12 @@ class _AddClubPageState extends State<AddClubPage> {
 
   // Club fields
   String _name = '';
-  String _category = 'Civic / Service';
+  String _category = ''; // will be set after categories load
+
+  // Images
+  List<String> _imageUrls = []; // gallery: multiple URLs
+  String _bannerImageUrl = ''; // separate banner / hero image
+
   String _meetingLocation = '';
   String _meetingSchedule = '';
   String _contactName = '';
@@ -34,30 +45,33 @@ class _AddClubPageState extends State<AddClubPage> {
   String? _metroName;
   String? _areaId;
   String? _areaName;
-  String _address = '';
 
-  // Loaded docs
+  // Postal address parts
+  String _street = '';
+  String _city = '';
+  String _postalState = '';
+  String _zip = '';
+
+  // Loaded location docs (not currently shown in UI, but can be reused if needed)
   List<QueryDocumentSnapshot> _states = [];
   List<QueryDocumentSnapshot> _metros = [];
   List<QueryDocumentSnapshot> _areas = [];
 
-  static const _categories = [
-    'Civic / Service',
-    'Youth Sports',
-    'Adult Sports',
-    'Church / Faith-based',
-    'Nonprofit',
-    'School / Booster',
-    'Hobby / Special Interest',
-    'Other',
-  ];
+  // Dynamic categories for Clubs section
+  List<Category> _categories = [];
+  bool _loadingCategories = true;
+  String? _categoriesError;
 
   @override
   void initState() {
     super.initState();
     _loadStates();
+    _loadCategories(); // load club categories from Firestore
   }
 
+  // ─────────────────────────────
+  // Location loading
+  // ─────────────────────────────
   Future<void> _loadStates() async {
     try {
       final snap = await FirebaseFirestore.instance
@@ -132,6 +146,64 @@ class _AddClubPageState extends State<AddClubPage> {
     }
   }
 
+  // ─────────────────────────────
+  // Load categories from Firestore
+  // ─────────────────────────────
+  Future<void> _loadCategories() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('categories')
+          .where('section', isEqualTo: kClubsSectionSlug)
+          .where('isActive', isEqualTo: true)
+          .orderBy('sortOrder')
+          .get();
+
+      final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      setState(() {
+        _categories = cats;
+        _loadingCategories = false;
+        _categoriesError = null;
+
+        if (_categories.isNotEmpty) {
+          final names = _categories.map((c) => c.name).toList();
+          // If current _category is not valid, default to first
+          if (!names.contains(_category)) {
+            _category = names.first;
+          }
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _loadingCategories = false;
+        _categoriesError = 'Error loading categories: $e';
+      });
+    }
+  }
+
+  // ─────────────────────────────
+  // Navigation to ImageUrlsEditorPage
+  // ─────────────────────────────
+  Future<void> _editImages() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => ImageUrlsEditorPage(
+          initialUrls: _imageUrls,
+          title: 'Club Images',
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _imageUrls = result;
+      });
+    }
+  }
+
+  // ─────────────────────────────
+  // Save
+  // ─────────────────────────────
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
 
@@ -144,14 +216,40 @@ class _AddClubPageState extends State<AddClubPage> {
       return;
     }
 
+    if (_categories.isNotEmpty && _category.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a category for this club.'),
+        ),
+      );
+      return;
+    }
+
     _form.currentState!.save();
+
+    final trimmedBanner = _bannerImageUrl.trim();
+
+    // Combined full address
+    final fullAddress = [
+      _street.trim(),
+      _city.trim(),
+      _postalState.trim(),
+      _zip.trim(),
+    ].where((e) => e.isNotEmpty).join(', ');
 
     setState(() => _saving = true);
 
     try {
       await FirebaseFirestore.instance.collection('clubs').add({
         'name': _name.trim(),
+        // Store the selected category name (from Firebase)
         'category': _category,
+
+        // Images: gallery + banner
+        'imageUrls': _imageUrls,
+        'imageUrl': _imageUrls.isNotEmpty ? _imageUrls.first : '',
+        'bannerImageUrl': trimmedBanner,
+
         'meetingLocation': _meetingLocation.trim(),
         'meetingSchedule': _meetingSchedule.trim(),
         'contactName': _contactName.trim(),
@@ -169,7 +267,13 @@ class _AddClubPageState extends State<AddClubPage> {
         'metroName': _metroName ?? '',
         'areaId': _areaId,
         'areaName': _areaName ?? '',
-        'address': _address.trim(),
+
+        // Postal address parts + combined
+        'street': _street.trim(),
+        'city': _city.trim(),
+        'state': _postalState.trim(),
+        'zip': _zip.trim(),
+        'address': fullAddress,
 
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -189,6 +293,9 @@ class _AddClubPageState extends State<AddClubPage> {
     }
   }
 
+  // ─────────────────────────────
+  // UI
+  // ─────────────────────────────
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -213,24 +320,115 @@ class _AddClubPageState extends State<AddClubPage> {
               ),
               const SizedBox(height: 12),
 
-              // Category
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories
-                    .map(
-                      (c) => DropdownMenuItem(
-                        value: c,
-                        child: Text(c),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v ?? _category),
+              // IMAGES SECTION
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Gallery images'),
+                subtitle: Text(
+                  _imageUrls.isEmpty
+                      ? 'No images added yet'
+                      : '${_imageUrls.length} image(s) added',
+                  style: TextStyle(color: cs.onSurfaceVariant),
+                ),
+                trailing: OutlinedButton.icon(
+                  onPressed: _editImages,
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('Manage'),
+                ),
+              ),
+              const SizedBox(height: 4),
+              if (_imageUrls.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _imageUrls
+                      .take(3)
+                      .map(
+                        (url) => Chip(
+                          label: Text(
+                            url,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              if (_imageUrls.length > 3)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '+ ${_imageUrls.length - 3} more',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
+
+              // Banner image
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Banner image URL',
+                  hintText: 'https://example.com/banner.jpg',
+                  helperText: 'Used as the hero / cover image for this club',
+                ),
+                keyboardType: TextInputType.url,
+                onSaved: (v) => _bannerImageUrl = v ?? '',
               ),
               const SizedBox(height: 16),
 
+              // Category (dynamic from Firestore)
+              if (_loadingCategories) ...[
+                const Row(
+                  children: [
+                    Text('Category'),
+                    SizedBox(width: 12),
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ] else if (_categoriesError != null) ...[
+                Text(
+                  _categoriesError!,
+                  style: TextStyle(color: cs.error),
+                ),
+                const SizedBox(height: 16),
+              ] else if (_categories.isEmpty) ...[
+                Text(
+                  'No categories configured for clubs (section "$kClubsSectionSlug").\n'
+                  'Go to Admin → Categories and add some.',
+                  style: TextStyle(color: cs.error),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                DropdownButtonFormField<String>(
+                  value:
+                      _category.isNotEmpty ? _category : _categories.first.name,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: _categories
+                      .map(
+                        (c) => DropdownMenuItem<String>(
+                          value: c.name,
+                          child: Text(c.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _category = v);
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // Location selector (using your existing widget)
               LocationSelector(
-                initialStateId: _stateId, // if you have them
+                initialStateId: _stateId,
                 initialMetroId: _metroId,
                 initialAreaId: _areaId,
                 onChanged: (loc) {
@@ -244,15 +442,53 @@ class _AddClubPageState extends State<AddClubPage> {
                   });
                 },
               ),
+              const SizedBox(height: 16),
+
+              // Postal address fields
+              TextFormField(
+                decoration: const InputDecoration(
+                  labelText: 'Street',
+                  hintText: '123 Main Street',
+                ),
+                onSaved: (v) => _street = v ?? '',
+              ),
               const SizedBox(height: 12),
 
               TextFormField(
-                initialValue: _address,
                 decoration: const InputDecoration(
-                  labelText: 'Address',
-                  hintText: '123 Main Street',
+                  labelText: 'City',
+                  hintText: 'Tallapoosa',
                 ),
-                onSaved: (v) => _address = v ?? '',
+                onSaved: (v) => _city = v ?? '',
+              ),
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'State',
+                        hintText: 'GA',
+                      ),
+                      textCapitalization: TextCapitalization.characters,
+                      onSaved: (v) => _postalState = (v ?? '').toUpperCase(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'ZIP',
+                        hintText: '30176',
+                      ),
+                      keyboardType: TextInputType.number,
+                      onSaved: (v) => _zip = v ?? '',
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 

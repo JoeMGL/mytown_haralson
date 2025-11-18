@@ -209,7 +209,7 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
                             (areaId) => DropdownMenuItem(
                               value: areaId,
                               child: Text(
-                                areaId == null || areaId.isEmpty
+                                areaId == null || areaId.isNotEmpty == false
                                     ? 'All areas'
                                     : areaLabels[areaId] ?? areaId,
                               ),
@@ -239,6 +239,7 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
                     final club = filteredClubs[index];
 
                     return ListTile(
+                      leading: _ClubThumbnail(club: club),
                       title: Text(
                         club.name,
                         style: TextStyle(
@@ -249,12 +250,20 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${club.address} • ${club.category}'),
+                          // Address + category
+                          Text(
+                            [
+                              if (club.address.isNotEmpty) club.address,
+                              if (club.category.isNotEmpty) club.category,
+                            ].join(' • '),
+                          ),
+                          // Meeting schedule
                           if (club.meetingSchedule.isNotEmpty)
                             Text(
                               club.meetingSchedule,
                               style: const TextStyle(fontSize: 12),
                             ),
+                          // Location hierarchy
                           if (club.stateName.isNotEmpty ||
                               club.metroName.isNotEmpty ||
                               club.areaName.isNotEmpty)
@@ -265,6 +274,15 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
                                 if (club.areaName.isNotEmpty) club.areaName,
                               ].join(' • '),
                               style: const TextStyle(fontSize: 11),
+                            ),
+                          // Image count
+                          if (club.imageUrls.isNotEmpty)
+                            Text(
+                              '${club.imageUrls.length} image(s)',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: cs.onSurfaceVariant,
+                              ),
                             ),
                         ],
                       ),
@@ -355,6 +373,43 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
         label: const Text('Add Club / Group'),
         foregroundColor: Colors.white,
         backgroundColor: const Color(0xFF146C43),
+      ),
+    );
+  }
+}
+
+/// Small thumbnail for the club using bannerImageUrl when available.
+class _ClubThumbnail extends StatelessWidget {
+  const _ClubThumbnail({required this.club});
+
+  final Club club;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final banner = club.bannerImageUrl;
+
+    if (banner.isEmpty) {
+      return CircleAvatar(
+        backgroundColor: cs.surfaceVariant,
+        child: const Icon(Icons.group),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Image.network(
+          banner,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: cs.surfaceVariant,
+              child: const Icon(Icons.broken_image),
+            );
+          },
+        ),
       ),
     );
   }

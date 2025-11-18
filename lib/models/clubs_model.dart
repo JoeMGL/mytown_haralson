@@ -4,18 +4,28 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Club {
   final String id;
 
-  // Location
+  // Location (logical location selection)
   final String stateId;
   final String stateName;
   final String metroId;
   final String metroName;
   final String areaId;
   final String areaName;
-  final String address;
+
+  // Address (postal)
+  final String street;
+  final String city;
+  final String state; // postal state (GA, AL, etc.)
+  final String zip;
+  final String address; // combined / legacy formatted address
 
   // Core fields
   final String name;
   final String category;
+
+  // Images
+  final List<String> imageUrls; // gallery
+  final String bannerImageUrl; // banner / hero
 
   final String meetingLocation;
   final String meetingSchedule;
@@ -41,9 +51,15 @@ class Club {
     required this.metroName,
     required this.areaId,
     required this.areaName,
+    required this.street,
+    required this.city,
+    required this.state,
+    required this.zip,
     required this.address,
     required this.name,
     required this.category,
+    required this.imageUrls,
+    required this.bannerImageUrl,
     required this.meetingLocation,
     required this.meetingSchedule,
     required this.contactName,
@@ -61,6 +77,49 @@ class Club {
   factory Club.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
 
+    // Multi-images (with legacy support)
+    List<String> parsedImageUrls = [];
+    final rawImageUrls = data['imageUrls'];
+
+    if (rawImageUrls is List) {
+      parsedImageUrls = rawImageUrls
+          .where((e) => e != null)
+          .map((e) => e.toString())
+          .where((e) => e.trim().isNotEmpty)
+          .toList();
+    }
+
+    if (parsedImageUrls.isEmpty && data['imageUrl'] != null) {
+      final legacy = data['imageUrl'].toString().trim();
+      if (legacy.isNotEmpty) {
+        parsedImageUrls = [legacy];
+      }
+    }
+
+    // Banner: prefer explicit bannerImageUrl, fallback to imageUrl / first gallery image
+    String banner = (data['bannerImageUrl'] ?? '').toString().trim();
+    if (banner.isEmpty && data['imageUrl'] != null) {
+      banner = data['imageUrl'].toString().trim();
+    }
+    if (banner.isEmpty && parsedImageUrls.isNotEmpty) {
+      banner = parsedImageUrls.first;
+    }
+
+    final street = data['street'] ?? '';
+    final city = data['city'] ?? '';
+    final state = data['state'] ?? '';
+    final zip = data['zip'] ?? '';
+
+    // Legacy combined address (or derive from parts if missing)
+    String addr = data['address'] ?? '';
+    if ((addr as String).trim().isEmpty) {
+      final parts = [street, city, state, zip]
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      addr = parts.join(', ');
+    }
+
     return Club(
       id: doc.id,
       stateId: data['stateId'] ?? '',
@@ -69,9 +128,15 @@ class Club {
       metroName: data['metroName'] ?? '',
       areaId: data['areaId'] ?? '',
       areaName: data['areaName'] ?? '',
-      address: data['address'] ?? '',
+      street: street,
+      city: city,
+      state: state,
+      zip: zip,
+      address: addr,
       name: data['name'] ?? '',
       category: data['category'] ?? '',
+      imageUrls: parsedImageUrls,
+      bannerImageUrl: banner,
       meetingLocation: data['meetingLocation'] ?? '',
       meetingSchedule: data['meetingSchedule'] ?? '',
       contactName: data['contactName'] ?? '',
@@ -88,6 +153,13 @@ class Club {
 
   /// Model → Firestore map
   Map<String, dynamic> toMap() {
+    final combinedAddress = address.isNotEmpty
+        ? address
+        : [street, city, state, zip]
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .join(', ');
+
     return {
       'stateId': stateId,
       'stateName': stateName,
@@ -95,9 +167,22 @@ class Club {
       'metroName': metroName,
       'areaId': areaId,
       'areaName': areaName,
-      'address': address,
+
+      // Address parts
+      'street': street,
+      'city': city,
+      'state': state,
+      'zip': zip,
+      'address': combinedAddress,
+
       'name': name,
       'category': category,
+
+      // images
+      'imageUrls': imageUrls,
+      'imageUrl': imageUrls.isNotEmpty ? imageUrls.first : '',
+      'bannerImageUrl': bannerImageUrl,
+
       'meetingLocation': meetingLocation,
       'meetingSchedule': meetingSchedule,
       'contactName': contactName,

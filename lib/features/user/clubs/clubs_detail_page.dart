@@ -13,147 +13,309 @@ class ClubDetailPage extends StatelessWidget {
     if (url.isEmpty) return;
     final uri = Uri.parse(url);
     if (await canLaunchUrlString(uri.toString())) {
-      await launchUrlString(uri.toString(),
-          mode: LaunchMode.externalApplication);
+      // If LaunchMode isn't available in your import, you can remove the mode parameter.
+      await launchUrlString(
+        uri.toString(),
+        mode: LaunchMode.externalApplication,
+      );
     }
+  }
+
+  String _buildAddress() {
+    final line1 = club.street.trim();
+    final city = club.city.trim();
+    final state = club.state.trim();
+    final zip = club.zip.trim();
+
+    final line2Parts = [
+      if (city.isNotEmpty) city,
+      if (state.isNotEmpty) state,
+      if (zip.isNotEmpty) zip,
+    ];
+    final line2 = line2Parts.join(', ');
+
+    if (line1.isEmpty && line2.isEmpty) {
+      // fallback to legacy combined address if present
+      return club.address;
+    }
+    if (line1.isNotEmpty && line2.isNotEmpty) {
+      return '$line1\n$line2';
+    }
+    return line1.isNotEmpty ? line1 : line2;
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+
+    final addressText = _buildAddress();
+    final hasBanner = club.bannerImageUrl.isNotEmpty;
+    final hasGallery = club.imageUrls.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(club.name),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Header
-          Text(
-            club.name,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${club.address} • ${club.category}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-
-          const SizedBox(height: 16),
-          const Divider(),
-
-          // Meeting info
-          if (club.meetingLocation.isNotEmpty ||
-              club.meetingSchedule.isNotEmpty) ...[
-            Text(
-              'Meetings',
-              style: Theme.of(context).textTheme.titleMedium,
+      body: CustomScrollView(
+        slivers: [
+          // HERO BANNER
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: hasBanner ? 220 : 120,
+            flexibleSpace: FlexibleSpaceBar(
+              title: Text(
+                club.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              background: hasBanner
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.network(
+                          club.bannerImageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: cs.surfaceVariant,
+                              child: const Icon(Icons.broken_image, size: 48),
+                            );
+                          },
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.1),
+                                Colors.black.withOpacity(0.5),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Container(
+                      color: cs.primaryContainer,
+                      child: Center(
+                        child: Icon(
+                          Icons.group,
+                          size: 72,
+                          color: cs.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
             ),
-            const SizedBox(height: 8),
-            if (club.meetingLocation.isNotEmpty)
-              Row(
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.place, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(club.meetingLocation)),
-                ],
-              ),
-            if (club.meetingSchedule.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.calendar_today, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(club.meetingSchedule)),
-                ],
-              ),
-            ],
-            const SizedBox(height: 16),
-            const Divider(),
-          ],
-
-          // Contact info
-          Text(
-            'Contact',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-
-          if (club.contactName.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.person),
-              title: Text(club.contactName),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-            ),
-
-          if (club.contactPhone.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.phone),
-              title: Text(club.contactPhone),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              onTap: () {
-                _launchIfNotEmpty('tel:${club.contactPhone}');
-              },
-            ),
-
-          if (club.contactEmail.isNotEmpty)
-            ListTile(
-              leading: const Icon(Icons.email),
-              title: Text(club.contactEmail),
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              onTap: () {
-                _launchIfNotEmpty('mailto:${club.contactEmail}');
-              },
-            ),
-
-          const SizedBox(height: 8),
-
-          // Website / Facebook buttons
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (club.website.isNotEmpty)
-                FilledButton.icon(
-                  onPressed: () => _launchIfNotEmpty(club.website),
-                  icon: const Icon(Icons.language),
-                  label: const Text('Website'),
-                ),
-              if (club.facebook.isNotEmpty)
-                OutlinedButton.icon(
-                  onPressed: () => _launchIfNotEmpty(club.facebook),
-                  icon: const Icon(Icons.facebook),
-                  label: const Text('Facebook'),
-                ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          // Featured badge
-          if (club.featured)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                Icon(Icons.star, color: cs.primary),
-                const SizedBox(width: 8),
-                Text(
-                  'Featured club',
-                  style: TextStyle(
-                    color: cs.primary,
-                    fontWeight: FontWeight.w600,
+                  // CATEGORY + FEATURED
+                  Row(
+                    children: [
+                      if (club.category.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cs.secondaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            club.category,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSecondaryContainer,
+                            ),
+                          ),
+                        ),
+                      if (club.featured) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.star, color: cs.primary, size: 18),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Featured',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+
+                  // ADDRESS
+                  if (addressText.isNotEmpty) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.place, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            addressText,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // IMAGE GALLERY
+                  if (hasGallery) ...[
+                    Text(
+                      'Photos',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 110,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: club.imageUrls.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final url = club.imageUrls[index];
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: AspectRatio(
+                              aspectRatio: 4 / 3,
+                              child: Image.network(
+                                url,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                  color: cs.surfaceVariant,
+                                  child:
+                                      const Icon(Icons.broken_image, size: 28),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                  ],
+
+                  // MEETING INFO
+                  if (club.meetingLocation.isNotEmpty ||
+                      club.meetingSchedule.isNotEmpty) ...[
+                    Text(
+                      'Meetings',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    if (club.meetingLocation.isNotEmpty)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.place, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(club.meetingLocation)),
+                        ],
+                      ),
+                    if (club.meetingSchedule.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.calendar_today, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(club.meetingSchedule)),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    const Divider(),
+                  ],
+
+                  // CONTACT INFO
+                  Text(
+                    'Contact',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (club.contactName.isNotEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.person),
+                      title: Text(club.contactName),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+
+                  if (club.contactPhone.isNotEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.phone),
+                      title: Text(club.contactPhone),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        _launchIfNotEmpty('tel:${club.contactPhone}');
+                      },
+                    ),
+
+                  if (club.contactEmail.isNotEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.email),
+                      title: Text(club.contactEmail),
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () {
+                        _launchIfNotEmpty('mailto:${club.contactEmail}');
+                      },
+                    ),
+
+                  const SizedBox(height: 8),
+
+                  // Website / Facebook buttons
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (club.website.isNotEmpty)
+                        FilledButton.icon(
+                          onPressed: () => _launchIfNotEmpty(club.website),
+                          icon: const Icon(Icons.language),
+                          label: const Text('Website'),
+                        ),
+                      if (club.facebook.isNotEmpty)
+                        OutlinedButton.icon(
+                          onPressed: () => _launchIfNotEmpty(club.facebook),
+                          icon: const Icon(Icons.facebook),
+                          label: const Text('Facebook'),
+                        ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Active state
+                  if (!club.active)
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: cs.error),
+                        const SizedBox(width: 8),
+                        Text(
+                          'This club is currently inactive.',
+                          style: TextStyle(color: cs.error),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
             ),
+          ),
         ],
       ),
     );

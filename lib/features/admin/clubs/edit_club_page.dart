@@ -2,7 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/clubs_model.dart';
+import '../../../models/category.dart';
 import '../../../widgets/location_selector.dart';
+import '../../../widgets/image_editor_page.dart';
+
+/// Must match the `section` value in your `categories` docs for clubs/groups.
+const String kClubsSectionSlug = 'clubs';
 
 class EditClubPage extends StatefulWidget {
   const EditClubPage({
@@ -30,9 +35,12 @@ class _EditClubPageState extends State<EditClubPage> {
   late String _facebook;
   late bool _featured;
   late bool _active;
-  late String _adderss;
 
-  // location
+  // Images
+  late List<String> _imageUrls;
+  late String _bannerImageUrl;
+
+  // Location
   String? _stateId;
   String? _stateName;
   String? _metroId;
@@ -40,25 +48,26 @@ class _EditClubPageState extends State<EditClubPage> {
   String? _areaId;
   String? _areaName;
 
+  // Postal address
+  late String _street;
+  late String _city;
+  late String _postalState;
+  late String _zip;
+
   bool _saving = false;
 
-  static const _categories = [
-    'Civic / Service',
-    'Youth Sports',
-    'Adult Sports',
-    'Church / Faith-based',
-    'Nonprofit',
-    'School / Booster',
-    'Hobby / Special Interest',
-    'Other',
-  ];
+  // 🔹 Dynamic categories from Firestore
+  List<Category> _categories = [];
+  bool _loadingCategories = true;
+  String? _categoriesError;
 
   @override
   void initState() {
     super.initState();
+
     final c = widget.club;
     _name = c.name;
-    _category = c.category.isNotEmpty ? c.category : _categories.first;
+    _category = c.category; // we'll validate against fetched categories
     _meetingLocation = c.meetingLocation;
     _meetingSchedule = c.meetingSchedule;
     _contactName = c.contactName;
@@ -68,14 +77,82 @@ class _EditClubPageState extends State<EditClubPage> {
     _facebook = c.facebook;
     _featured = c.featured;
     _active = c.active;
-    _adderss = c.address;
 
+    // Images
+    _imageUrls = List<String>.from(c.imageUrls);
+    _bannerImageUrl = c.bannerImageUrl;
+
+    // Location (logical)
     _stateId = c.stateId.isNotEmpty ? c.stateId : null;
     _stateName = c.stateName;
     _metroId = c.metroId.isNotEmpty ? c.metroId : null;
     _metroName = c.metroName;
     _areaId = c.areaId.isNotEmpty ? c.areaId : null;
     _areaName = c.areaName;
+
+    // Postal address
+    _street = c.street;
+    _city = c.city;
+    _postalState = c.state;
+    _zip = c.zip;
+
+    _loadCategories();
+  }
+
+  // ─────────────────────────────
+  // 🔹 Load categories for Clubs section
+  // ─────────────────────────────
+  Future<void> _loadCategories() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('categories')
+          .where('section', isEqualTo: kClubsSectionSlug)
+          .where('isActive', isEqualTo: true)
+          .orderBy('sortOrder')
+          .get();
+
+      final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      setState(() {
+        _categories = cats;
+        _loadingCategories = false;
+        _categoriesError = null;
+
+        if (_categories.isNotEmpty) {
+          final names = _categories.map((c) => c.name).toList();
+
+          // If existing category is empty or not in the list, default to first.
+          if (_category.isEmpty || !names.contains(_category)) {
+            _category = names.first;
+          }
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _loadingCategories = false;
+        _categoriesError = 'Error loading categories: $e';
+      });
+    }
+  }
+
+  // ─────────────────────────────
+  // Image editor navigation
+  // ─────────────────────────────
+  Future<void> _editImages() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => ImageUrlsEditorPage(
+          initialUrls: _imageUrls,
+          title: 'Club Images',
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _imageUrls = result;
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -92,7 +169,24 @@ class _EditClubPageState extends State<EditClubPage> {
       return;
     }
 
+    if (_categories.isNotEmpty && _category.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a category for this club.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
+
+    // Combined full address
+    final fullAddress = [
+      _street.trim(),
+      _city.trim(),
+      _postalState.trim(),
+      _zip.trim(),
+    ].where((e) => e.isNotEmpty).join(', ');
 
     try {
       await FirebaseFirestore.instance
@@ -100,7 +194,14 @@ class _EditClubPageState extends State<EditClubPage> {
           .doc(widget.club.id)
           .update({
         'name': _name.trim(),
+        // Category is the selected name from Firestore-backed list
         'category': _category,
+
+        // Images
+        'imageUrls': _imageUrls,
+        'imageUrl': _imageUrls.isNotEmpty ? _imageUrls.first : '',
+        'bannerImageUrl': _bannerImageUrl.trim(),
+
         'meetingLocation': _meetingLocation.trim(),
         'meetingSchedule': _meetingSchedule.trim(),
         'contactName': _contactName.trim(),
@@ -110,13 +211,22 @@ class _EditClubPageState extends State<EditClubPage> {
         'facebook': _facebook.trim(),
         'featured': _featured,
         'active': _active,
+
+        // Location
         'stateId': _stateId,
         'stateName': _stateName ?? '',
         'metroId': _metroId,
         'metroName': _metroName ?? '',
         'areaId': _areaId,
         'areaName': _areaName ?? '',
-        'address': _adderss.trim(),
+
+        // Postal address parts + combined
+        'street': _street.trim(),
+        'city': _city.trim(),
+        'state': _postalState.trim(),
+        'zip': _zip.trim(),
+        'address': fullAddress,
+
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -136,6 +246,8 @@ class _EditClubPageState extends State<EditClubPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Edit Club: ${widget.club.name}'),
@@ -157,21 +269,112 @@ class _EditClubPageState extends State<EditClubPage> {
               ),
               const SizedBox(height: 12),
 
-              // Category
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories
-                    .map(
-                      (c) => DropdownMenuItem(
-                        value: c,
-                        child: Text(c),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v ?? _category),
+              // IMAGES SECTION
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Gallery images'),
+                subtitle: Text(
+                  _imageUrls.isEmpty
+                      ? 'No images added yet'
+                      : '${_imageUrls.length} image(s) added',
+                  style: TextStyle(color: cs.onSurfaceVariant),
+                ),
+                trailing: OutlinedButton.icon(
+                  onPressed: _editImages,
+                  icon: const Icon(Icons.photo_library),
+                  label: const Text('Manage'),
+                ),
+              ),
+              const SizedBox(height: 4),
+              if (_imageUrls.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _imageUrls
+                      .take(3)
+                      .map(
+                        (url) => Chip(
+                          label: Text(
+                            url,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              if (_imageUrls.length > 3)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '+ ${_imageUrls.length - 3} more',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
+
+              // Banner image
+              TextFormField(
+                initialValue: _bannerImageUrl,
+                decoration: const InputDecoration(
+                  labelText: 'Banner image URL',
+                  hintText: 'https://example.com/banner.jpg',
+                  helperText: 'Used as the hero / cover image for this club',
+                ),
+                keyboardType: TextInputType.url,
+                onSaved: (v) => _bannerImageUrl = v ?? '',
               ),
               const SizedBox(height: 16),
+
+              // 🔹 Category (dynamic from Firestore)
+              if (_loadingCategories) ...[
+                const Row(
+                  children: [
+                    Text('Category'),
+                    SizedBox(width: 12),
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ] else if (_categoriesError != null) ...[
+                Text(
+                  _categoriesError!,
+                  style: TextStyle(color: cs.error),
+                ),
+                const SizedBox(height: 16),
+              ] else if (_categories.isEmpty) ...[
+                Text(
+                  'No categories configured for clubs (section "$kClubsSectionSlug").\n'
+                  'Go to Admin → Categories and add some.',
+                  style: TextStyle(color: cs.error),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                DropdownButtonFormField<String>(
+                  value:
+                      _category.isNotEmpty ? _category : _categories.first.name,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: _categories
+                      .map(
+                        (c) => DropdownMenuItem<String>(
+                          value: c.name,
+                          child: Text(c.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _category = v);
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // Location selector (shared widget)
               LocationSelector(
@@ -179,23 +382,67 @@ class _EditClubPageState extends State<EditClubPage> {
                 initialMetroId: _metroId,
                 initialAreaId: _areaId,
                 onChanged: (loc) {
-                  _stateId = loc.stateId;
-                  _stateName = loc.stateName;
-                  _metroId = loc.metroId;
-                  _metroName = loc.metroName;
-                  _areaId = loc.areaId;
-                  _areaName = loc.areaName;
+                  setState(() {
+                    _stateId = loc.stateId;
+                    _stateName = loc.stateName;
+                    _metroId = loc.metroId;
+                    _metroName = loc.metroName;
+                    _areaId = loc.areaId;
+                    _areaName = loc.areaName;
+                  });
                 },
+              ),
+              const SizedBox(height: 16),
+
+              // Postal address fields
+              TextFormField(
+                initialValue: _street,
+                decoration: const InputDecoration(
+                  labelText: 'Street',
+                  hintText: '123 Main Street',
+                ),
+                onSaved: (v) => _street = v ?? '',
               ),
               const SizedBox(height: 12),
 
               TextFormField(
-                initialValue: _adderss,
+                initialValue: _city,
                 decoration: const InputDecoration(
-                  labelText: 'Address',
-                  hintText: '123 Main Street',
+                  labelText: 'City',
+                  hintText: 'Tallapoosa',
                 ),
-                onSaved: (v) => _adderss = v ?? '',
+                onSaved: (v) => _city = v ?? '',
+              ),
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      initialValue: _postalState,
+                      decoration: const InputDecoration(
+                        labelText: 'State',
+                        hintText: 'GA',
+                      ),
+                      textCapitalization: TextCapitalization.characters,
+                      onSaved: (v) => _postalState = (v ?? '').toUpperCase(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 3,
+                    child: TextFormField(
+                      initialValue: _zip,
+                      decoration: const InputDecoration(
+                        labelText: 'ZIP',
+                        hintText: '30176',
+                      ),
+                      keyboardType: TextInputType.number,
+                      onSaved: (v) => _zip = v ?? '',
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 

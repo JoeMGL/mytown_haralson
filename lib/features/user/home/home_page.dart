@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '/core/location/location_provider.dart'; // adjust path if needed
-import '../../widgets/featured_places_section.dart'; // 👈 keeps your featured section
+import '../../../widgets/featured_places_section.dart'; // 👈 keeps your featured section
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
