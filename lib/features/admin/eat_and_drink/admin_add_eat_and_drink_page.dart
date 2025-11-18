@@ -356,7 +356,7 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
         id: '',
         name: name,
         city: _city.trim(),
-        category: _category, // category slug
+        category: _category,
         description: _description.trim(),
         imageUrl: imageUrl,
         heroTag: '',
@@ -383,6 +383,10 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
         metroName: _metroName ?? '',
         areaId: _areaId ?? '',
         areaName: _areaName ?? '',
+
+        // ✅ NEW required fields
+        galleryImageUrls: _imageUrls,
+        bannerImageUrl: _bannerImageUrl,
       );
 
       await FirebaseFirestore.instance.collection('eatAndDrink').add({

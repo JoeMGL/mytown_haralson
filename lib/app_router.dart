@@ -20,8 +20,10 @@ import 'features/user/home/home_page.dart';
 import 'features/user/explore/explore_page.dart';
 import 'features/user/explore/explore_detail_page.dart';
 import 'features/user/events/events_page.dart';
-import 'features/user/eat_and_drink/eat_and_drink_page.dart';
-import 'features/user/eat_and_drink/eat_and_drink_details_page.dart';
+import 'features/user/eat_and_drink/eat_and_drink_page.dart' as eat_list;
+import 'features/user/eat_and_drink/eat_and_drink_details_page.dart'
+    as eat_details;
+
 import 'features/user/stay/stay_page.dart';
 import 'features/user/shop/shop_page.dart';
 import 'features/user/shop/shop_detail_page.dart';
@@ -41,7 +43,7 @@ import 'features/admin/explore/admin_explore_page.dart';
 import 'features/admin/explore/add_attraction_page.dart';
 import 'features/admin/explore/edit_attraction_page.dart';
 import 'features/admin/clubs/edit_club_page.dart';
-import 'features/admin/eat_and_drink/add_eat_and_drink_page.dart';
+import 'features/admin/eat_and_drink/admin_add_eat_and_drink_page.dart';
 import 'features/admin/eat_and_drink/admin_eat_and_drink_page.dart';
 import 'features/admin/eat_and_drink/edit_eat_and_drink_page.dart';
 import 'features/admin/lodging/admin_lodging_page.dart';
@@ -106,10 +108,12 @@ final GoRouter appRouter = GoRouter(
         // /eat
         GoRoute(
           path: 'eat',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AppShell(
+          pageBuilder: (context, state) => NoTransitionPage(
+            // 🔹 remove `const` here to avoid const-eval issues
+            child: const AppShell(
               title: 'Eat & Drink',
-              child: EatAndDrinkPage(),
+              child:
+                  eat_list.EatAndDrinkPage(), // 👈 aliased + const constructor
             ),
           ),
           routes: [
@@ -118,15 +122,13 @@ final GoRouter appRouter = GoRouter(
               name: 'eatDetail',
               builder: (context, state) {
                 final eat = state.extra as EatAndDrink;
-
-                return EatAndDrinkDetailsPage(
-                  place: eat, // ✔ NEW API
+                return eat_details.EatAndDrinkDetailsPage(
+                  place: eat,
                 );
               },
             ),
           ],
         ),
-
         // /clubs
         GoRoute(
           path: 'clubs',

@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '/core/location/location_provider.dart'; // adjust path if needed
 import '../../../widgets/featured_places_section.dart'; // 👈 keeps your featured section
-
+import '../../../widgets/featured_eat_and_drink_section.dart';
 import '../../../widgets/featured_clubs_section.dart';
 
 class HomePage extends ConsumerWidget {
@@ -199,6 +199,19 @@ class HomePage extends ConsumerWidget {
                       onPlaceTap: (place) {
                         context.pushNamed(
                           'exploreDetail',
+                          extra: place,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+
+                    FeaturedEatAndDrinkSection(
+                      title: 'Eat & Drink',
+                      stateId: stateId,
+                      metroId: metroId,
+                      onPlaceTap: (place) {
+                        context.pushNamed(
+                          'eatDetail', // whatever your route is
                           extra: place,
                         );
                       },
