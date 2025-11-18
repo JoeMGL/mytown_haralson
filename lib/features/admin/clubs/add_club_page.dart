@@ -22,13 +22,14 @@ class _AddClubPageState extends State<AddClubPage> {
 
   // Controllers for fields that must round-trip perfectly
   late TextEditingController _nameController;
+  late TextEditingController _bannerController;
+  late TextEditingController _descriptionController;
 
   // Club fields
   String _category = ''; // will be set after categories load
 
   // Images
   List<String> _imageUrls = []; // gallery: multiple URLs
-  String _bannerImageUrl = ''; // separate banner / hero image
 
   String _meetingLocation = '';
   String _meetingSchedule = '';
@@ -68,6 +69,8 @@ class _AddClubPageState extends State<AddClubPage> {
   void initState() {
     super.initState();
     _nameController = TextEditingController();
+    _bannerController = TextEditingController();
+    _descriptionController = TextEditingController();
     _loadStates();
     _loadCategories(); // load club categories from Firestore
   }
@@ -75,6 +78,8 @@ class _AddClubPageState extends State<AddClubPage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _bannerController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -236,16 +241,17 @@ class _AddClubPageState extends State<AddClubPage> {
 
     _form.currentState!.save(); // still needed for the non-controller fields
 
-    // 🔐 Always get the latest name from the controller
+    // Always get the latest values from controllers
     final name = _nameController.text.trim();
+    final banner = _bannerController.text.trim();
+    final description = _descriptionController.text.trim();
+
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a name for this club.')),
       );
       return;
     }
-
-    final trimmedBanner = _bannerImageUrl.trim();
 
     // Combined full address
     final fullAddress = [
@@ -263,10 +269,13 @@ class _AddClubPageState extends State<AddClubPage> {
         // Store the selected category name (from Firebase)
         'category': _category,
 
+        // Description
+        'description': description,
+
         // Images: gallery + banner
         'imageUrls': _imageUrls,
         'imageUrl': _imageUrls.isNotEmpty ? _imageUrls.first : '',
-        'bannerImageUrl': trimmedBanner,
+        'bannerImageUrl': banner,
 
         'meetingLocation': _meetingLocation.trim(),
         'meetingSchedule': _meetingSchedule.trim(),
@@ -386,13 +395,25 @@ class _AddClubPageState extends State<AddClubPage> {
 
               // Banner image
               TextFormField(
+                controller: _bannerController,
                 decoration: const InputDecoration(
                   labelText: 'Banner image URL',
                   hintText: 'https://example.com/banner.jpg',
                   helperText: 'Used as the hero / cover image for this club',
                 ),
                 keyboardType: TextInputType.url,
-                onSaved: (v) => _bannerImageUrl = v ?? '',
+              ),
+              const SizedBox(height: 16),
+
+              // DESCRIPTION
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  hintText: 'Tell visitors what this club is about...',
+                ),
+                maxLines: 4,
+                minLines: 3,
               ),
               const SizedBox(height: 16),
 

@@ -24,8 +24,10 @@ class EditClubPage extends StatefulWidget {
 class _EditClubPageState extends State<EditClubPage> {
   final _form = GlobalKey<FormState>();
 
-  // 🔹 Controller for name so it always round-trips correctly
+  // Controllers so fields round-trip correctly
   late TextEditingController _nameController;
+  late TextEditingController
+      _descriptionController; // NEW: description controller
 
   late String _category;
   late String _meetingLocation;
@@ -58,7 +60,7 @@ class _EditClubPageState extends State<EditClubPage> {
 
   bool _saving = false;
 
-  // 🔹 Dynamic categories from Firestore
+  // Dynamic categories from Firestore
   List<Category> _categories = [];
   bool _loadingCategories = true;
   String? _categoriesError;
@@ -70,6 +72,7 @@ class _EditClubPageState extends State<EditClubPage> {
     final c = widget.club;
 
     _nameController = TextEditingController(text: c.name);
+    _descriptionController = TextEditingController(text: c.description); // NEW
 
     _category = c.category; // we'll validate against fetched categories
     _meetingLocation = c.meetingLocation;
@@ -106,11 +109,12 @@ class _EditClubPageState extends State<EditClubPage> {
   @override
   void dispose() {
     _nameController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
   // ─────────────────────────────
-  // 🔹 Load categories for Clubs section
+  // Load categories for Clubs section
   // ─────────────────────────────
   Future<void> _loadCategories() async {
     try {
@@ -170,8 +174,10 @@ class _EditClubPageState extends State<EditClubPage> {
 
     _form.currentState!.save();
 
-    // ✅ Always read the latest name from the controller
+    // Always read latest name & description from controllers
     final name = _nameController.text.trim();
+    final description = _descriptionController.text.trim();
+
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a name for this club.')),
@@ -189,11 +195,9 @@ class _EditClubPageState extends State<EditClubPage> {
     }
 
     if (_categories.isNotEmpty && _category.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a category for this club.'),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please select a category for this club.'),
+      ));
       return;
     }
 
@@ -212,9 +216,11 @@ class _EditClubPageState extends State<EditClubPage> {
           .collection('clubs')
           .doc(widget.club.id)
           .update({
-        'name': name, // 🔥 updated name from controller
-        // Category is the selected name from Firestore-backed list
+        'name': name,
         'category': _category,
+
+        // ✅ Guaranteed description update
+        'description': description,
 
         // Images
         'imageUrls': _imageUrls,
@@ -269,7 +275,6 @@ class _EditClubPageState extends State<EditClubPage> {
 
     return Scaffold(
       appBar: AppBar(
-        // This title uses the original name; the field below is editable.
         title: Text('Edit Club: ${widget.club.name}'),
       ),
       body: AbsorbPointer(
@@ -288,7 +293,7 @@ class _EditClubPageState extends State<EditClubPage> {
               ),
               const SizedBox(height: 12),
 
-              // IMAGES SECTION
+              // Gallery
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Gallery images'),
@@ -347,7 +352,19 @@ class _EditClubPageState extends State<EditClubPage> {
               ),
               const SizedBox(height: 16),
 
-              // 🔹 Category (dynamic from Firestore)
+              // Description (uses controller)
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  hintText: 'Tell visitors what this club is about...',
+                ),
+                maxLines: 4,
+                minLines: 3,
+              ),
+              const SizedBox(height: 16),
+
+              // Category (dynamic)
               if (_loadingCategories) ...[
                 const Row(
                   children: [
@@ -395,7 +412,7 @@ class _EditClubPageState extends State<EditClubPage> {
                 const SizedBox(height: 16),
               ],
 
-              // Location selector (shared widget)
+              // Location selector
               LocationSelector(
                 initialStateId: _stateId,
                 initialMetroId: _metroId,

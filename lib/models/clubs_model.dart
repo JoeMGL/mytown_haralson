@@ -7,6 +7,7 @@ class Club {
   // Core
   final String name;
   final String category;
+  final String description; // NEW: long description / about text
 
   // Images
   final List<String> imageUrls;
@@ -49,6 +50,7 @@ class Club {
     required this.id,
     required this.name,
     required this.category,
+    required this.description, // NEW
     required this.imageUrls,
     required this.imageUrl,
     required this.bannerImageUrl,
@@ -89,6 +91,7 @@ class Club {
       id: doc.id,
       name: (data['name'] as String?)?.trim() ?? '',
       category: (data['category'] as String?)?.trim() ?? '',
+      description: (data['description'] as String?)?.trim() ?? '', // NEW
 
       // Images
       imageUrls: _stringList(data['imageUrls']),
@@ -152,6 +155,7 @@ class Club {
         id: id,
         name: (data['name'] as String?)?.trim() ?? '',
         category: (data['category'] as String?)?.trim() ?? '',
+        description: (data['description'] as String?)?.trim() ?? '', // NEW
         imageUrls: _stringList(data['imageUrls']),
         imageUrl: (data['imageUrl'] as String?)?.trim() ?? '',
         bannerImageUrl: (data['bannerImageUrl'] as String?)?.trim() ?? '',

@@ -52,6 +52,7 @@ class ClubDetailPage extends StatelessWidget {
     final addressText = _buildAddress();
     final hasBanner = club.bannerImageUrl.isNotEmpty;
     final hasGallery = club.imageUrls.isNotEmpty;
+    final hasDescription = club.description.trim().isNotEmpty;
 
     return Scaffold(
       body: CustomScrollView(
@@ -167,6 +168,21 @@ class ClubDetailPage extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
+                  ],
+
+                  // ABOUT / DESCRIPTION
+                  if (hasDescription) ...[
+                    Text(
+                      'About',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      club.description.trim(),
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
                   ],
 
                   // IMAGE GALLERY
