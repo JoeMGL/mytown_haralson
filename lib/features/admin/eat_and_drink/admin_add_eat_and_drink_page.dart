@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import '../../../models/eat_and_drink.dart';
 import '../../../models/category.dart';
 import '../../../widgets/location_selector.dart';
-import '../../../widgets/image_editor_page.dart'; // 👈 use your widget
+import '../../../widgets/image_editor_page.dart';
+import '../../../widgets/weekly_hours_field.dart'; // 👈 NEW: hours widget
 
 /// Must match the `section` value in your `categories` docs
 /// for the Eat & Drink section.
@@ -28,13 +29,15 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
   String _city = 'Tallapoosa';
   String _category = ''; // category slug from Firestore
   String _description = '';
-  String _hours = '';
   String _phone = '';
   String _website = '';
   String _mapQuery = '';
 
   bool _featured = false;
   bool _saving = false;
+
+  // 🔹 NEW: structured hours
+  HoursByDay _hoursByDay = {}; // Map<String, DayHours>
 
   // Location
   String? _stateId;
@@ -266,13 +269,15 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
               ),
               const SizedBox(height: 12),
 
-              // Hours (simple text for now)
-              TextFormField(
-                decoration: const InputDecoration(
-                  labelText: 'Hours',
-                  hintText: 'e.g. Mon–Sat 11am–9pm',
-                ),
-                onSaved: (v) => _hours = v?.trim() ?? '',
+              // 🔹 NEW: Weekly hours picker
+              WeeklyHoursField(
+                initialValue: _hoursByDay,
+                onChanged: (value) {
+                  setState(() {
+                    _hoursByDay = value;
+                  });
+                },
+                label: 'Hours',
               ),
               const SizedBox(height: 12),
 
@@ -360,7 +365,8 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
         description: _description.trim(),
         imageUrl: imageUrl,
         heroTag: '',
-        hours: _hours.trim().isEmpty ? null : _hours.trim(),
+        // 🔹 Legacy hours string – now unused, keep null for compatibility
+        hours: null,
         tags: const [],
         coords: null,
         phone: _phone.trim().isEmpty ? null : _phone.trim(),
@@ -393,6 +399,10 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
         ...place.toMap(),
         'galleryImageUrls': _imageUrls,
         'bannerImageUrl': _bannerImageUrl.isEmpty ? null : _bannerImageUrl,
+        // 🔹 Save structured hours to Firestore
+        'hoursByDay': _hoursByDay.map(
+          (key, value) => MapEntry(key, value.toMap()),
+        ),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });

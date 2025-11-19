@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'place.dart'; // for DayHours
 
 class EatAndDrink {
   final String id;
@@ -12,12 +13,15 @@ class EatAndDrink {
   final String heroTag;
 
   // Details
-  final String? hours;
+  final String? hours; // legacy
   final List<String> tags;
   final GeoPoint? coords;
   final String? phone;
   final String? website;
   final String? mapQuery;
+
+  // 🔹 NEW: structured hours by day
+  final Map<String, DayHours>? hoursByDay;
 
   // Flags
   final bool featured;
@@ -32,7 +36,7 @@ class EatAndDrink {
   final String areaId;
   final String areaName;
 
-  // NEW: media
+  // Media
   final List<String> galleryImageUrls;
   final String bannerImageUrl;
 
@@ -50,6 +54,7 @@ class EatAndDrink {
     this.phone,
     this.website,
     this.mapQuery,
+    this.hoursByDay, // 👈 NEW
     required this.featured,
     required this.active,
     required this.search,
@@ -74,6 +79,19 @@ class EatAndDrink {
       return const [];
     }
 
+    Map<String, DayHours>? _readHoursByDay() {
+      final raw = data['hoursByDay'];
+      if (raw is Map<String, dynamic>) {
+        return raw.map((key, value) {
+          if (value is Map<String, dynamic>) {
+            return MapEntry(key, DayHours.fromMap(value));
+          }
+          return MapEntry(key, const DayHours(closed: true));
+        });
+      }
+      return null;
+    }
+
     return EatAndDrink(
       id: doc.id,
       name: (data['name'] ?? '').toString(),
@@ -88,6 +106,7 @@ class EatAndDrink {
       phone: data['phone']?.toString(),
       website: data['website']?.toString(),
       mapQuery: data['mapQuery']?.toString(),
+      hoursByDay: _readHoursByDay(), // 👈 NEW
       featured: (data['featured'] ?? false) as bool,
       active: (data['active'] ?? true) as bool,
       search: _readStringList('search'),
@@ -116,6 +135,9 @@ class EatAndDrink {
       'phone': phone,
       'website': website,
       'mapQuery': mapQuery,
+      'hoursByDay': hoursByDay?.map(
+        (key, value) => MapEntry(key, value.toMap()),
+      ),
       'featured': featured,
       'active': active,
       'search': search,
@@ -143,6 +165,7 @@ class EatAndDrink {
     String? phone,
     String? website,
     String? mapQuery,
+    Map<String, DayHours>? hoursByDay,
     bool? featured,
     bool? active,
     List<String>? search,
@@ -169,6 +192,7 @@ class EatAndDrink {
       phone: phone ?? this.phone,
       website: website ?? this.website,
       mapQuery: mapQuery ?? this.mapQuery,
+      hoursByDay: hoursByDay ?? this.hoursByDay,
       featured: featured ?? this.featured,
       active: active ?? this.active,
       search: search ?? this.search,

@@ -1,8 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../../../models/stay.dart';
+import '../../../models/lodging.dart';
+import '../../../models/place.dart' show DayHours;
+import '../../../models/category.dart';
 import '../../../widgets/location_selector.dart';
+import '../../../widgets/weekly_hours_field.dart';
+
+/// Must match the `section` value used for lodging categories.
+const String kStaysSectionSlug = 'stays';
 
 class EditLodgingPage extends StatefulWidget {
   const EditLodgingPage({
@@ -20,11 +26,14 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
   final _form = GlobalKey<FormState>();
 
   late String _name;
+
+  // Address parts
+  late String _street;
   late String _city;
-  late String _category;
-  late String _address;
+  late String _state;
+  late String _zip;
+
   late String _description;
-  late String _hours;
   late String _phone;
   late String _website;
   late String _mapQuery;
@@ -34,6 +43,7 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
 
   bool _saving = false;
 
+  // Location selector (for filters)
   String? _stateId;
   String? _stateName;
   String? _metroId;
@@ -41,14 +51,14 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
   String? _areaId;
   String? _areaName;
 
-  static const _categories = [
-    'Hotel',
-    'Motel',
-    'Cabin / Cottage',
-    'Campground / RV Park',
-    'Vacation Rental',
-    'Other',
-  ];
+  // Categories (dynamic from Firestore)
+  List<Category> _categories = [];
+  String? _selectedCategoryId;
+  bool _loadingCategories = true;
+  String? _categoriesError;
+
+  // Structured hours
+  Map<String, DayHours> _hoursByDay = {};
 
   @override
   void initState() {
@@ -56,11 +66,13 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
     final s = widget.stay;
 
     _name = s.name;
+
+    _street = s.street;
     _city = s.city;
-    _category = s.category.isNotEmpty ? s.category : _categories.first;
-    _address = s.address;
+    _state = s.state.isNotEmpty ? s.state : 'GA';
+    _zip = s.zip;
+
     _description = s.description;
-    _hours = s.hours ?? '';
     _phone = s.phone ?? '';
     _website = s.website ?? '';
     _mapQuery = s.mapQuery ?? '';
@@ -74,10 +86,49 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
     _metroName = s.metroName;
     _areaId = s.areaId.isNotEmpty ? s.areaId : null;
     _areaName = s.areaName;
+
+    _hoursByDay = s.hoursByDay ?? {};
+
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('categories')
+          .where('section', isEqualTo: kStaysSectionSlug)
+          .orderBy('sortOrder')
+          .get();
+
+      final cats = snap.docs.map<Category>((d) => Category.fromDoc(d)).toList();
+
+      // Try to match existing stay.category to a Category.name
+      Category? selected;
+      try {
+        selected = cats.firstWhere((c) => c.name == widget.stay.category);
+      } catch (_) {
+        if (cats.isNotEmpty) {
+          selected = cats.first;
+        }
+      }
+
+      setState(() {
+        _categories = cats;
+        _selectedCategoryId = selected?.id;
+        _loadingCategories = false;
+      });
+    } catch (e) {
+      setState(() {
+        _categoriesError = 'Error loading categories: $e';
+        _loadingCategories = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Edit Lodging: ${widget.stay.name}'),
@@ -89,6 +140,7 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Name
               TextFormField(
                 initialValue: _name,
                 decoration: const InputDecoration(labelText: 'Name'),
@@ -97,24 +149,99 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _categories.contains(_category)
-                    ? _category
-                    : _categories.first,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v ?? _category),
+
+              // Category dropdown (dynamic)
+              if (_loadingCategories) ...[
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(),
+                ),
+              ] else if (_categoriesError != null) ...[
+                Text(
+                  _categoriesError!,
+                  style: TextStyle(color: cs.error),
+                ),
+                const SizedBox(height: 8),
+              ] else ...[
+                DropdownButtonFormField<String>(
+                  value: _selectedCategoryId,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: _categories
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c.id,
+                          child: Text(c.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    setState(() => _selectedCategoryId = v);
+                  },
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Please choose a category'
+                      : null,
+                ),
+              ],
+              const SizedBox(height: 16),
+
+              // 📍 Full street address fields
+              TextFormField(
+                initialValue: _street,
+                decoration: const InputDecoration(
+                  labelText: 'Street Address',
+                  hintText: '123 Main Street',
+                ),
+                textCapitalization: TextCapitalization.words,
+                onSaved: (v) => _street = v?.trim() ?? '',
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Street is required'
+                    : null,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                initialValue: _city,
-                decoration: const InputDecoration(labelText: 'City'),
-                onSaved: (v) => _city = v?.trim() ?? '',
-                textCapitalization: TextCapitalization.words,
+
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      initialValue: _city,
+                      decoration: const InputDecoration(labelText: 'City'),
+                      textCapitalization: TextCapitalization.words,
+                      onSaved: (v) => _city = v?.trim() ?? '',
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'City required'
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 1,
+                    child: TextFormField(
+                      initialValue: _state,
+                      decoration: const InputDecoration(labelText: 'State'),
+                      textCapitalization: TextCapitalization.characters,
+                      onSaved: (v) => _state = v?.trim() ?? '',
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'State' : null,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 1,
+                    child: TextFormField(
+                      initialValue: _zip,
+                      decoration: const InputDecoration(labelText: 'ZIP'),
+                      keyboardType: TextInputType.number,
+                      onSaved: (v) => _zip = v?.trim() ?? '',
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty) ? 'ZIP' : null,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
+
+              // LocationSelector (for filters: state/metro/area)
               LocationSelector(
                 initialStateId: _stateId,
                 initialMetroId: _metroId,
@@ -130,26 +257,20 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
                   });
                 },
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                initialValue: _address,
-                decoration: const InputDecoration(
-                  labelText: 'Address',
-                  hintText: '123 Main Street',
-                ),
-                onSaved: (v) => _address = v?.trim() ?? '',
-                textCapitalization: TextCapitalization.words,
+              const SizedBox(height: 16),
+
+              // Weekly hours widget
+              WeeklyHoursField(
+                initialValue: _hoursByDay,
+                onChanged: (value) {
+                  setState(() {
+                    _hoursByDay = value;
+                  });
+                },
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                initialValue: _hours,
-                decoration: const InputDecoration(
-                  labelText: 'Hours',
-                  hintText: 'e.g. 24/7 or check-in times',
-                ),
-                onSaved: (v) => _hours = v?.trim() ?? '',
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+
+              // Description
               TextFormField(
                 initialValue: _description,
                 decoration: const InputDecoration(labelText: 'Description'),
@@ -157,6 +278,8 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
                 onSaved: (v) => _description = v?.trim() ?? '',
               ),
               const SizedBox(height: 16),
+
+              // Phone
               TextFormField(
                 initialValue: _phone,
                 decoration: const InputDecoration(labelText: 'Phone'),
@@ -164,6 +287,8 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
                 onSaved: (v) => _phone = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Website
               TextFormField(
                 initialValue: _website,
                 decoration: const InputDecoration(
@@ -174,6 +299,8 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
                 onSaved: (v) => _website = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
+
+              // Maps query
               TextFormField(
                 initialValue: _mapQuery,
                 decoration: const InputDecoration(
@@ -183,6 +310,7 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
                 onSaved: (v) => _mapQuery = v?.trim() ?? '',
               ),
               const SizedBox(height: 16),
+
               SwitchListTile(
                 title: const Text('Featured'),
                 value: _featured,
@@ -194,6 +322,7 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
                 onChanged: (v) => setState(() => _active = v),
               ),
               const SizedBox(height: 24),
+
               FilledButton.icon(
                 onPressed: _saving ? null : _save,
                 icon: _saving
@@ -225,19 +354,46 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
       return;
     }
 
+    if (_selectedCategoryId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a category for this lodging.'),
+        ),
+      );
+      return;
+    }
+
+    final category = _categories.firstWhere(
+      (c) => c.id == _selectedCategoryId,
+      orElse: () => _categories.first,
+    );
+
     setState(() => _saving = true);
 
     try {
+      final fullAddress =
+          _street.isEmpty ? '' : '$_street, $_city, $_state $_zip'.trim();
+
       await FirebaseFirestore.instance
           .collection('stays')
           .doc(widget.stay.id)
           .update({
         'name': _name.trim(),
         'city': _city.trim(),
-        'category': _category,
-        'address': _address.trim(),
+        'category': category.name,
+        'address': fullAddress,
+        'street': _street.trim(),
+        'state': _state.trim(),
+        'zip': _zip.trim(),
         'description': _description.trim(),
-        'hours': _hours.trim().isEmpty ? null : _hours.trim(),
+
+        // structured hours
+        'hoursByDay': _hoursByDay.isEmpty
+            ? null
+            : _hoursByDay.map(
+                (key, value) => MapEntry(key, value.toMap()),
+              ),
+
         'phone': _phone.trim().isEmpty ? null : _phone.trim(),
         'website': _website.trim().isEmpty ? null : _website.trim(),
         'mapQuery': _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
@@ -252,7 +408,8 @@ class _EditLodgingPageState extends State<EditLodgingPage> {
         'search': [
           _name.toLowerCase(),
           _city.toLowerCase(),
-          _category.toLowerCase(),
+          category.name.toLowerCase(),
+          if (_street.isNotEmpty) _street.toLowerCase(),
         ],
         'updatedAt': FieldValue.serverTimestamp(),
       });

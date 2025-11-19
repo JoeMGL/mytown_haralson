@@ -24,6 +24,9 @@ class EatAndDrinkDetailsPage extends StatelessWidget {
       if (place.areaName.isNotEmpty) place.areaName,
     ].join(' • ');
 
+    final todayHoursText = _formatTodayHours(place);
+    final weeklyLines = _formatWeeklyHours(place);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(place.name),
@@ -45,7 +48,7 @@ class EatAndDrinkDetailsPage extends StatelessWidget {
                     )
                   : Container(
                       height: 220,
-                      color: cs.surfaceContainerHighest, // ✅ no surfaceVariant
+                      color: cs.surfaceContainerHighest,
                       child: Icon(
                         Icons.restaurant,
                         size: 64,
@@ -74,10 +77,8 @@ class EatAndDrinkDetailsPage extends StatelessWidget {
             ),
           const SizedBox(height: 12),
 
-          // (No address here – model has no address field)
-
-          // Hours
-          if (place.hours != null && place.hours!.isNotEmpty) ...[
+          // HOURS: today + optional full week
+          if (todayHoursText != null && todayHoursText.isNotEmpty) ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -85,13 +86,61 @@ class EatAndDrinkDetailsPage extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    place.hours!,
+                    todayHoursText,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+          ],
+          if (weeklyLines.isNotEmpty) ...[
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              title: Text(
+                'Full week hours',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              children: weeklyLines
+                  .map(
+                    (line) => Padding(
+                      padding: const EdgeInsets.only(
+                        left: 32,
+                        right: 8,
+                        top: 2,
+                        bottom: 2,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          line,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
             const SizedBox(height: 16),
+          ] else ...[
+            // Legacy fallback: if no structured hours and we have a single string
+            if ((place.hours ?? '').isNotEmpty) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.schedule, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      place.hours!,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
           ],
 
           // Description
@@ -136,6 +185,94 @@ class EatAndDrinkDetailsPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Returns a string like:
+  /// - "Today: 9:00 AM – 5:00 PM"
+  /// - "Closed today"
+  /// - or falls back to legacy place.hours
+  String? _formatTodayHours(EatAndDrink place) {
+    final map = place.hoursByDay;
+    if (map == null || map.isEmpty) {
+      // Fallback to legacy string if you want it to appear here
+      return place.hours;
+    }
+
+    final now = DateTime.now();
+    final weekdayKey = switch (now.weekday) {
+      DateTime.monday => 'mon',
+      DateTime.tuesday => 'tue',
+      DateTime.wednesday => 'wed',
+      DateTime.thursday => 'thu',
+      DateTime.friday => 'fri',
+      DateTime.saturday => 'sat',
+      DateTime.sunday => 'sun',
+      _ => 'mon',
+    };
+
+    final day = map[weekdayKey];
+    if (day == null || day.closed) {
+      return 'Closed today';
+    }
+
+    final open = (day.open ?? '').trim();
+    final close = (day.close ?? '').trim();
+
+    if (open.isEmpty && close.isEmpty) {
+      return 'Open today';
+    } else if (open.isNotEmpty && close.isNotEmpty) {
+      return 'Today: $open – $close';
+    } else if (open.isNotEmpty) {
+      return 'Today: from $open';
+    } else {
+      return 'Today: until $close';
+    }
+  }
+
+  /// Returns lines like:
+  /// - "Mon: Closed"
+  /// - "Tue: 9:00 AM – 5:00 PM"
+  List<String> _formatWeeklyHours(EatAndDrink place) {
+    final map = place.hoursByDay;
+    if (map == null || map.isEmpty) return const [];
+
+    const dayOrder = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    const labels = <String, String>{
+      'mon': 'Mon',
+      'tue': 'Tue',
+      'wed': 'Wed',
+      'thu': 'Thu',
+      'fri': 'Fri',
+      'sat': 'Sat',
+      'sun': 'Sun',
+    };
+
+    final lines = <String>[];
+
+    for (final key in dayOrder) {
+      final label = labels[key] ?? key;
+      final day = map[key];
+
+      if (day == null || day.closed) {
+        lines.add('$label: Closed');
+        continue;
+      }
+
+      final open = (day.open ?? '').trim();
+      final close = (day.close ?? '').trim();
+
+      if (open.isEmpty && close.isEmpty) {
+        lines.add('$label: Open');
+      } else if (open.isNotEmpty && close.isNotEmpty) {
+        lines.add('$label: $open – $close');
+      } else if (open.isNotEmpty) {
+        lines.add('$label: from $open');
+      } else {
+        lines.add('$label: until $close');
+      }
+    }
+
+    return lines;
   }
 
   Future<void> _launchUrl(String url) async {

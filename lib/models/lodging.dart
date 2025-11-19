@@ -1,17 +1,38 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'place.dart' show DayHours; // reuse DayHours from Place model
+
 class Stay {
   final String id;
 
   final String name;
   final String city;
   final String category; // e.g. Hotel, Cabin, Campground
+
+  /// ⭐ NEW: individual address parts
+  final String street;
+  final String state;
+  final String zip;
+
+  /// Combined address, e.g. "123 Main St, Tallapoosa, GA 30176"
   final String address;
+
   final String description;
 
   final String imageUrl;
   final String heroTag;
+
+  /// Legacy free-text hours string (e.g. "24/7" or "Check-in 3pm").
   final String? hours;
+
+  /// NEW: structured hours by day, shared with Explore / Eat & Drink.
+  /// Stored in Firestore as:
+  /// {
+  ///   "monday": {"closed": false, "open": "9:00 AM", "close": "5:00 PM"},
+  ///   ...
+  /// }
+  final Map<String, DayHours>? hoursByDay;
+
   final String? mapQuery;
   final String? phone;
   final String? website;
@@ -41,6 +62,7 @@ class Stay {
     required this.imageUrl,
     required this.heroTag,
     this.hours,
+    this.hoursByDay,
     this.mapQuery,
     this.phone,
     this.website,
@@ -49,6 +71,11 @@ class Stay {
     this.coords,
     this.tags = const [],
     this.search = const [],
+
+    // ⭐ NEW: optional with defaults so older code still compiles
+    this.street = '',
+    this.state = '',
+    this.zip = '',
     this.stateId = '',
     this.stateName = '',
     this.metroId = '',
@@ -60,16 +87,49 @@ class Stay {
   factory Stay.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
 
+    // Parse hoursByDay map from Firestore -> Map<String, DayHours>
+    Map<String, DayHours>? parsedHoursByDay;
+    final rawHoursByDay = data['hoursByDay'];
+
+    if (rawHoursByDay is Map) {
+      parsedHoursByDay = rawHoursByDay.map((key, value) {
+        if (value is Map<String, dynamic>) {
+          return MapEntry(key as String, DayHours.fromMap(value));
+        }
+        if (value is Map) {
+          // In case it's Map<dynamic, dynamic>
+          return MapEntry(
+            key.toString(),
+            DayHours.fromMap(Map<String, dynamic>.from(value)),
+          );
+        }
+        // Fallback: mark as closed if malformed
+        return MapEntry(key.toString(), const DayHours(closed: true));
+      });
+    }
+
     return Stay(
       id: doc.id,
       name: (data['name'] ?? '') as String,
       city: (data['city'] ?? '') as String,
       category: (data['category'] ?? '') as String,
+
+      // ⭐ NEW: individual address parts (will be '' for old docs)
+      street: (data['street'] ?? '') as String,
+      state: (data['state'] ?? '') as String,
+      zip: (data['zip'] ?? '') as String,
+
       address: (data['address'] ?? '') as String,
       description: (data['description'] ?? '') as String,
       imageUrl: (data['imageUrl'] ?? '') as String,
       heroTag: (data['heroTag'] ?? doc.id) as String,
+
+      // legacy text hours
       hours: data['hours'] as String?,
+
+      // structured hours
+      hoursByDay: parsedHoursByDay,
+
       mapQuery: data['mapQuery'] as String?,
       phone: data['phone'] as String?,
       website: data['website'] as String?,
@@ -92,11 +152,23 @@ class Stay {
       'name': name,
       'city': city,
       'category': category,
+
+      // ⭐ NEW: individual address parts
+      'street': street,
+      'state': state,
+      'zip': zip,
+
       'address': address,
       'description': description,
       'imageUrl': imageUrl,
       'heroTag': heroTag,
+
+      // keep both for compatibility
       'hours': hours,
+      'hoursByDay': hoursByDay?.map(
+        (key, value) => MapEntry(key, value.toMap()),
+      ),
+
       'mapQuery': mapQuery,
       'phone': phone,
       'website': website,

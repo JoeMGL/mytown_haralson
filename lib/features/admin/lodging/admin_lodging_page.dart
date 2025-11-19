@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../models/stay.dart';
+import '../../../models/lodging.dart';
 
 class AdminLodgingPage extends StatefulWidget {
   const AdminLodgingPage({super.key});
@@ -242,6 +242,9 @@ class _AdminLodgingPageState extends State<AdminLodgingPage> {
                       if (stay.areaName.isNotEmpty) stay.areaName,
                     ].join(' • ');
 
+                    final hasStructuredHours =
+                        stay.hoursByDay != null && stay.hoursByDay!.isNotEmpty;
+
                     return ListTile(
                       title: Text(
                         stay.name,
@@ -268,7 +271,18 @@ class _AdminLodgingPageState extends State<AdminLodgingPage> {
                               regionLine,
                               style: const TextStyle(fontSize: 11),
                             ),
-                          if (stay.hours != null && stay.hours!.isNotEmpty)
+
+                          // ✅ Hours display: prefer structured hours indicator, fall back to legacy text
+                          if (hasStructuredHours)
+                            Text(
+                              'Hours schedule set',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: cs.primary,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            )
+                          else if (stay.hours != null && stay.hours!.isNotEmpty)
                             Text(
                               stay.hours!,
                               style: const TextStyle(fontSize: 11),

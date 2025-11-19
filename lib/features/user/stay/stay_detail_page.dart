@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../models/stay.dart';
+import '../../../models/lodging.dart';
 
 class StayDetailPage extends StatelessWidget {
   const StayDetailPage({
@@ -76,38 +76,10 @@ class StayDetailPage extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Address
-          if (stay.address.isNotEmpty)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.location_on_outlined, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    stay.address,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ),
-              ],
-            ),
+          _buildAddressSection(context),
 
-          // Hours
-          if (stay.hours != null && stay.hours!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.schedule, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    stay.hours!,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ),
-              ],
-            ),
-          ],
+          // Hours (structured first, legacy fallback)
+          _buildHoursSection(context),
 
           const SizedBox(height: 16),
 
@@ -154,6 +126,155 @@ class StayDetailPage extends StatelessWidget {
       ),
     );
   }
+
+  // ---------- ADDRESS ----------
+
+  Widget _buildAddressSection(BuildContext context) {
+    // Prefer structured street/city/state/zip if available
+    final hasStructuredAddress = stay.street.isNotEmpty || stay.zip.isNotEmpty;
+
+    if (!hasStructuredAddress && stay.address.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final textTheme = Theme.of(context).textTheme;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.location_on_outlined, size: 18),
+        const SizedBox(width: 8),
+        Expanded(
+          child: hasStructuredAddress
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (stay.street.isNotEmpty)
+                      Text(
+                        stay.street,
+                        style: textTheme.bodyMedium,
+                      ),
+                    Text(
+                      [
+                        if (stay.city.isNotEmpty) stay.city,
+                        if (stay.state.isNotEmpty) stay.state,
+                        if (stay.zip.isNotEmpty) stay.zip,
+                      ].join(' ').trim(),
+                      style: textTheme.bodyMedium,
+                    ),
+                  ],
+                )
+              : Text(
+                  stay.address,
+                  style: textTheme.bodyMedium,
+                ),
+        ),
+      ],
+    );
+  }
+
+  // ---------- HOURS ----------
+
+  Widget _buildHoursSection(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    // Prefer structured hours if present
+    final hoursByDay = stay.hoursByDay;
+    if (hoursByDay != null && hoursByDay.isNotEmpty) {
+      final now = DateTime.now();
+      final weekdayKey = _weekdayKey(now.weekday);
+
+      final today = hoursByDay[weekdayKey];
+      String label;
+      if (today == null || today.closed) {
+        label = 'Closed today';
+      } else {
+        final open = today.open ?? '';
+        final close = today.close ?? '';
+        if (open.isEmpty && close.isEmpty) {
+          label = 'Hours not available';
+        } else if (open.isNotEmpty && close.isNotEmpty) {
+          label = '$open – $close';
+        } else {
+          label = (open + ' ' + close).trim();
+        }
+      }
+
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.schedule, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Today's hours",
+                    style: textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    label,
+                    style: textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Fallback: legacy free-text hours string
+    if (stay.hours != null && stay.hours!.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.schedule, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                stay.hours!,
+                style: textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  String _weekdayKey(int weekday) {
+    switch (weekday) {
+      case DateTime.monday:
+        return 'monday';
+      case DateTime.tuesday:
+        return 'tuesday';
+      case DateTime.wednesday:
+        return 'wednesday';
+      case DateTime.thursday:
+        return 'thursday';
+      case DateTime.friday:
+        return 'friday';
+      case DateTime.saturday:
+        return 'saturday';
+      case DateTime.sunday:
+      default:
+        return 'sunday';
+    }
+  }
+
+  // ---------- LAUNCH HELPERS ----------
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);

@@ -5,6 +5,7 @@ import '../../../models/eat_and_drink.dart';
 import '../../../models/category.dart';
 import '../../../widgets/location_selector.dart';
 import '../../../widgets/image_editor_page.dart';
+import '../../../widgets/weekly_hours_field.dart'; // 👈 NEW
 
 const String kEatSectionSlug = 'eatAndDrink';
 
@@ -27,7 +28,6 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
   late String _city;
   late String _category; // slug or legacy name (we normalize on load)
   late String _description;
-  late String _hours;
   late String _phone;
   late String _website;
   late String _mapQuery;
@@ -54,6 +54,9 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
   List<String> _imageUrls = [];
   String _bannerImageUrl = '';
 
+  // 🔹 NEW: structured hours
+  HoursByDay _hoursByDay = {}; // Map<String, DayHours>
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +66,6 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
     _city = p.city;
     _category = p.category; // might be name or slug, we’ll fix after load
     _description = p.description;
-    _hours = p.hours ?? '';
     _phone = p.phone ?? '';
     _website = p.website ?? '';
     _mapQuery = p.mapQuery ?? '';
@@ -80,8 +82,12 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
 
     _imageUrlController = TextEditingController(text: p.imageUrl);
 
-    _imageUrls = []; // if you later add galleryImageUrls to model, hydrate here
-    _bannerImageUrl = '';
+    // Hydrate images from model
+    _imageUrls = List<String>.from(p.galleryImageUrls);
+    _bannerImageUrl = p.bannerImageUrl;
+
+    // Hydrate structured hours (fallback to empty map)
+    _hoursByDay = p.hoursByDay ?? {};
 
     _loadCategories();
   }
@@ -304,14 +310,15 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
               ),
               const SizedBox(height: 12),
 
-              // Hours
-              TextFormField(
-                initialValue: _hours,
-                decoration: const InputDecoration(
-                  labelText: 'Hours',
-                  hintText: 'e.g. Mon–Sat 11am–9pm',
-                ),
-                onSaved: (v) => _hours = v?.trim() ?? '',
+              // 🔹 NEW: Weekly hours picker
+              WeeklyHoursField(
+                initialValue: _hoursByDay,
+                onChanged: (value) {
+                  setState(() {
+                    _hoursByDay = value;
+                  });
+                },
+                label: 'Hours',
               ),
               const SizedBox(height: 12),
 
@@ -403,9 +410,9 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
           .update({
         'name': _name.trim(),
         'city': _city.trim(),
-        'category': _category, // now normalized to slug
+        'category': _category, // normalized to slug
         'description': _description.trim(),
-        'hours': _hours.trim().isEmpty ? null : _hours.trim(),
+        // ❗ We no longer touch the legacy 'hours' string here; it stays as-is.
         'phone': _phone.trim().isEmpty ? null : _phone.trim(),
         'website': _website.trim().isEmpty ? null : _website.trim(),
         'mapQuery': _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
@@ -420,6 +427,10 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
         'imageUrl': imageUrl,
         'galleryImageUrls': _imageUrls,
         'bannerImageUrl': _bannerImageUrl.isEmpty ? null : _bannerImageUrl,
+        // 🔹 Save structured hours
+        'hoursByDay': _hoursByDay.map(
+          (key, value) => MapEntry(key, value.toMap()),
+        ),
         'search': [
           _name.toLowerCase(),
           _city.toLowerCase(),

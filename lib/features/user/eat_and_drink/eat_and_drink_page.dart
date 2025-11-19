@@ -293,6 +293,8 @@ class _EatAndDrinkPageState extends ConsumerState<EatAndDrinkPage> {
                           ? place.bannerImageUrl
                           : place.imageUrl;
 
+                      final todayHours = _formatTodayHours(place);
+
                       return GestureDetector(
                         onTap: () {
                           context.pushNamed(
@@ -347,8 +349,8 @@ class _EatAndDrinkPageState extends ConsumerState<EatAndDrinkPage> {
                                             .textTheme
                                             .bodyMedium,
                                       ),
-                                      if (place.hours != null &&
-                                          place.hours!.isNotEmpty)
+                                      if (todayHours != null &&
+                                          todayHours.isNotEmpty)
                                         Padding(
                                           padding:
                                               const EdgeInsets.only(top: 4),
@@ -357,7 +359,13 @@ class _EatAndDrinkPageState extends ConsumerState<EatAndDrinkPage> {
                                               const Icon(Icons.schedule,
                                                   size: 16),
                                               const SizedBox(width: 4),
-                                              Text(place.hours!),
+                                              Flexible(
+                                                child: Text(
+                                                  todayHours,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -378,5 +386,45 @@ class _EatAndDrinkPageState extends ConsumerState<EatAndDrinkPage> {
         );
       },
     );
+  }
+
+  /// Returns a short "today" hours string using structured hours if present,
+  /// otherwise falls back to the legacy `place.hours` string.
+  String? _formatTodayHours(EatAndDrink place) {
+    final map = place.hoursByDay;
+    if (map == null || map.isEmpty) {
+      // fallback to legacy string
+      return place.hours;
+    }
+
+    final now = DateTime.now();
+    final weekdayKey = switch (now.weekday) {
+      DateTime.monday => 'mon',
+      DateTime.tuesday => 'tue',
+      DateTime.wednesday => 'wed',
+      DateTime.thursday => 'thu',
+      DateTime.friday => 'fri',
+      DateTime.saturday => 'sat',
+      DateTime.sunday => 'sun',
+      _ => 'mon',
+    };
+
+    final day = map[weekdayKey];
+    if (day == null || day.closed) {
+      return 'Closed today';
+    }
+
+    final open = (day.open ?? '').trim();
+    final close = (day.close ?? '').trim();
+
+    if (open.isEmpty && close.isEmpty) {
+      return 'Open today';
+    } else if (open.isNotEmpty && close.isNotEmpty) {
+      return '$open – $close';
+    } else if (open.isNotEmpty) {
+      return 'From $open';
+    } else {
+      return 'Until $close';
+    }
   }
 }

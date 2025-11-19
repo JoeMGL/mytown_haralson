@@ -4,7 +4,7 @@ import 'package:visit_haralson/features/admin/events/admin_events_page.dart';
 import 'package:visit_haralson/features/admin/locations/admin_location_setup_page.dart';
 import 'package:visit_haralson/features/admin/shop/admin_shop_page.dart';
 import 'package:visit_haralson/features/user/stay/stay_detail_page.dart';
-import 'package:visit_haralson/models/stay.dart';
+import 'package:visit_haralson/models/lodging.dart';
 
 // MODELS
 import 'models/place.dart';
@@ -38,7 +38,7 @@ import 'features/user/clubs/clubs_detail_page.dart';
 import 'models/shop.dart';
 
 // ADMIN PAGES
-import 'features/admin/dashboard_page.dart';
+import 'features/admin/dashboard/dashboard_page.dart';
 import 'features/admin/explore/admin_explore_page.dart';
 import 'features/admin/explore/add_attraction_page.dart';
 import 'features/admin/explore/edit_attraction_page.dart';
