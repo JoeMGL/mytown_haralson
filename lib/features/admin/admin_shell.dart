@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminShell extends StatelessWidget {
   final Widget child;
@@ -18,8 +19,69 @@ class AdminShell extends StatelessWidget {
     final uri = GoRouterState.of(context).uri.toString();
     final isAdminRoute = uri.startsWith('/admin');
 
+    final user = FirebaseAuth.instance.currentUser;
+
+    // If somehow we're here with no user on an /admin route, push to login.
+    if (user == null && isAdminRoute) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.go('/login?from=$uri');
+      });
+      return const SizedBox.shrink();
+    }
+
+    // If no user AND not an admin route, just render normal shell (dev use)
+    if (user == null && !isAdminRoute) {
+      return _buildScaffold(context, uri, isAdminRoute);
+    }
+
+    // If user exists, check Firestore role
+    if (!isAdminRoute) {
+      // Not an admin route – no role enforcement needed, just render shell
+      return _buildScaffold(context, uri, isAdminRoute);
+    }
+
+    final usersRef = FirebaseFirestore.instance.collection('users');
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: usersRef.doc(user!.uid).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return _UnauthorizedScaffold(
+            title: title ?? 'Admin',
+            reason: 'No user record found. Admin access is restricted.',
+          );
+        }
+
+        final data = snapshot.data!.data()!;
+        final role = data['role'] as String? ?? 'user';
+
+        if (role != 'admin') {
+          return _UnauthorizedScaffold(
+            title: title ?? 'Admin',
+            reason: 'You do not have admin access for this site.',
+          );
+        }
+
+        // ✅ Authorized admin – render normal admin shell
+        return _buildScaffold(context, uri, isAdminRoute, showLogout: true);
+      },
+    );
+  }
+
+  /// Builds the main Scaffold with drawers, role toggle, and optional Logout.
+  Widget _buildScaffold(
+    BuildContext context,
+    String uri,
+    bool isAdminRoute, {
+    bool showLogout = false,
+  }) {
     return Scaffold(
-      // 🔹 Admin drawer on /admin..., User Dev drawer otherwise
       drawer: isAdminRoute ? const _AdminDrawer() : const _UserDevDrawer(),
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -31,7 +93,8 @@ class AdminShell extends StatelessWidget {
           ),
         ),
         title: Text(
-            title ?? (isAdminRoute ? 'Admin Dashboard' : 'Visit Haralson')),
+          title ?? (isAdminRoute ? 'Admin Dashboard' : 'Visit Haralson'),
+        ),
         actions: [
           // 🔁 Quick user/admin toggle
           _RoleButton(
@@ -53,10 +116,85 @@ class AdminShell extends StatelessWidget {
               context.go('/admin');
             },
           ),
+          const SizedBox(width: 8),
+
+          // 🔓 Logout icon (only when showLogout == true)
+          if (showLogout)
+            IconButton(
+              tooltip: 'Sign out',
+              icon: const Icon(Icons.logout),
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+                if (context.mounted) {
+                  context.go('/'); // back to public home
+                }
+              },
+            ),
           const SizedBox(width: 12),
         ],
       ),
       body: SafeArea(child: child),
+    );
+  }
+}
+
+/// Unauthorized screen used when user is logged in but not an admin.
+class _UnauthorizedScaffold extends StatelessWidget {
+  final String title;
+  final String reason;
+
+  const _UnauthorizedScaffold({
+    required this.title,
+    required this.reason,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Admin · $title'),
+        actions: [
+          IconButton(
+            tooltip: 'Back to site',
+            icon: const Icon(Icons.home),
+            onPressed: () => context.go('/'),
+          ),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.lock_outline, size: 48, color: cs.primary),
+                const SizedBox(height: 16),
+                Text(
+                  'Admin Access Required',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  reason,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/'),
+                  icon: const Icon(Icons.home),
+                  label: const Text('Back to site'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -76,7 +214,10 @@ class _AdminDrawer extends StatelessWidget {
         title: Text(label),
         selected: selected,
         onTap: () {
-          Navigator.of(context).pop(); // close drawer
+          // Close the drawer without touching Navigator stack ✅
+          final scaffold = Scaffold.maybeOf(context);
+          scaffold?.closeDrawer();
+
           context.go(route);
         },
       );
@@ -108,17 +249,13 @@ class _AdminDrawer extends StatelessWidget {
             tile('Users & Roles', '/admin/users', Icons.group_outlined),
             tile('Add Locations', '/admin/locations',
                 Icons.location_city_outlined),
-
+            tile('Claims', '/admin/claims', Icons.business_center_outlined),
             tile('Feedback', '/admin/feedback', Icons.feedback_outlined),
-
             tile('Manage Sections', '/admin/sections', Icons.category_rounded),
             tile('Manage Categories', '/admin/categories',
                 Icons.category_outlined),
             tile('Settings', '/admin/settings', Icons.settings_outlined),
-
             const Divider(),
-
-            // Quick shortcut to user Home from admin drawer
             ListTile(
               leading: const Icon(Icons.home_outlined),
               title: const Text('Go to User Home'),
@@ -168,8 +305,6 @@ class _UserDevDrawer extends StatelessWidget {
               subtitle: Text('User View (DEV)'),
             ),
             const Divider(),
-
-            // 🏠 Public/user routes (exactly as in app_router.dart)
             tile('Home', '/', Icons.home_outlined),
             tile('Explore', '/explore', Icons.explore_outlined),
             tile('Events', '/events', Icons.event_outlined),
@@ -177,10 +312,7 @@ class _UserDevDrawer extends StatelessWidget {
             tile('Stay', '/stay', Icons.hotel_outlined),
             tile('Clubs & Groups', '/clubs', Icons.groups_2_outlined),
             tile('Shop Local', '/shop', Icons.storefront_outlined),
-
             const Divider(),
-
-            // Back to Admin
             ListTile(
               leading: const Icon(Icons.admin_panel_settings_outlined),
               title: const Text('Go to Admin'),
@@ -236,8 +368,7 @@ class _MetroDropdown extends StatefulWidget {
 }
 
 class _MetroDropdownState extends State<_MetroDropdown> {
-  /// Selected metro's document path:
-  /// e.g. "states/ga/metros/haralson"
+  /// Selected metro's document path: e.g. "states/ga/metros/haralson"
   String? _selectedPath;
 
   @override
@@ -251,7 +382,6 @@ class _MetroDropdownState extends State<_MetroDropdown> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // Small spinner in place of dropdown while loading
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 8),
             child: SizedBox(
@@ -280,8 +410,6 @@ class _MetroDropdownState extends State<_MetroDropdown> {
         }
 
         final docs = snapshot.data!.docs;
-
-        // Default to first metro if nothing selected yet
         final defaultPath = docs.first.reference.path;
         final effectiveSelected = _selectedPath ?? defaultPath;
 
@@ -297,8 +425,7 @@ class _MetroDropdownState extends State<_MetroDropdown> {
             onChanged: (value) {
               if (value == null) return;
               setState(() => _selectedPath = value);
-
-              // TODO: later hook this into your location provider.
+              // TODO: hook into your location provider.
             },
             items: docs.map((d) {
               final data = d.data();

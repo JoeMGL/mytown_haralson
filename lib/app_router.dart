@@ -1,5 +1,11 @@
 // lib/app_router.dart
+import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+// ADMIN
 import 'package:visit_haralson/features/admin/events/admin_events_page.dart';
 import 'package:visit_haralson/features/admin/locations/admin_location_setup_page.dart';
 import 'package:visit_haralson/features/admin/shop/admin_shop_page.dart';
@@ -10,6 +16,7 @@ import 'package:visit_haralson/models/lodging.dart';
 import 'models/place.dart';
 import 'models/eat_and_drink.dart';
 import 'models/clubs_model.dart';
+import 'models/shop.dart';
 
 // SHELLS
 import 'app_shell.dart';
@@ -25,19 +32,14 @@ import 'features/user/eat_and_drink/eat_and_drink_details_page.dart'
     as eat_details;
 import 'features/user/settings/settings_page.dart';
 import 'features/support/contact_feedback_page.dart';
-
 import 'features/user/stay/stay_page.dart';
 import 'features/user/shop/shop_page.dart';
 import 'features/user/shop/shop_detail_page.dart';
+import 'features/claims/claim_business_page.dart';
 
 // clubs
 import 'features/user/clubs/clubs_page.dart';
 import 'features/user/clubs/clubs_detail_page.dart';
-
-// ADMIN PAGES
-//
-// MODELS
-import 'models/shop.dart';
 
 // ADMIN PAGES
 import 'features/admin/dashboard/dashboard_page.dart';
@@ -61,11 +63,85 @@ import 'features/admin/categories/admin_sections_page.dart';
 import 'features/admin/categories/admin_categories_page.dart';
 import 'features/admin/feedback/admin_feedback_detail_page.dart';
 import 'features/admin/feedback/admin_feedback_page.dart';
+import 'features/admin/claims/admin_claims_page.dart';
 import 'features/admin/config/global.dart';
+
+// 🔐 Auth UI
+import 'features/auth/login_page.dart';
+
+/// Helper to make GoRouter rebuild when auth state changes.
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    _subscription = stream.asBroadcastStream().listen((_) {
+      notifyListeners();
+    });
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
+  // 👇 Re-run redirect when FirebaseAuth authStateChanges fires
+  refreshListenable:
+      GoRouterRefreshStream(FirebaseAuth.instance.authStateChanges()),
+
+  redirect: (context, state) {
+    final user = FirebaseAuth.instance.currentUser;
+    final loggingIn = state.matchedLocation == '/login';
+    final isAdminRoute = state.matchedLocation.startsWith('/admin');
+
+    // Public routes (non-admin) are always allowed
+    if (!isAdminRoute) {
+      // If user is logged in and on /login, bounce them to either
+      // the "from" param or admin dashboard or home
+      if (loggingIn && user != null) {
+        final from = state.uri.queryParameters['from'];
+        if (from != null && from.isNotEmpty) {
+          return from;
+        }
+        return '/admin';
+      }
+      return null;
+    }
+
+    // From here down, we're in /admin...
+
+    // Not logged in → must go to /login
+    if (user == null) {
+      final from = state.uri.toString(); // remember where they were headed
+      return '/login?from=$from';
+    }
+
+    // Logged in and trying to access /login (with from=/admin/...) – already handled above,
+    // but keep this as a safety net.
+    if (loggingIn) {
+      final from = state.uri.queryParameters['from'];
+      if (from != null && from.isNotEmpty) {
+        return from;
+      }
+      return '/admin';
+    }
+
+    // Logged in & admin route → allow
+    return null;
+  },
+
   routes: [
+    // -------- LOGIN (public, but used by admin redirects) --------
+    GoRoute(
+      path: '/login',
+      pageBuilder: (context, state) => const NoTransitionPage(
+        child: LoginPage(),
+      ),
+    ),
+
     // -------- PUBLIC --------
     GoRoute(
       path: '/',
@@ -112,11 +188,10 @@ final GoRouter appRouter = GoRouter(
         // /eat
         GoRoute(
           path: 'eat',
-          pageBuilder: (context, state) => NoTransitionPage(
-            child: const AppShell(
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AppShell(
               title: 'Eat & Drink',
-              child:
-                  eat_list.EatAndDrinkPage(), // 👈 aliased + const constructor
+              child: eat_list.EatAndDrinkPage(),
             ),
           ),
           routes: [
@@ -132,6 +207,7 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+
         // /clubs
         GoRoute(
           path: 'clubs',
@@ -143,13 +219,11 @@ final GoRouter appRouter = GoRouter(
             ),
           ),
           routes: [
-            // /clubs/detail
             GoRoute(
               path: 'detail',
               name: 'clubDetail',
               builder: (context, state) {
-                final club =
-                    state.extra as Club; // from models/clubs_model.dart
+                final club = state.extra as Club;
                 return ClubDetailPage(club: club);
               },
             ),
@@ -166,7 +240,6 @@ final GoRouter appRouter = GoRouter(
             ),
           ),
           routes: [
-            // /stay/detail
             GoRoute(
               path: 'detail',
               name: 'stayDetail',
@@ -177,6 +250,7 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+
         // /shop
         GoRoute(
           path: 'shop',
@@ -198,6 +272,16 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+
+        GoRoute(
+          path: '/claim',
+          name: 'claim',
+          builder: (context, state) {
+            final docPath = state.extra as String;
+            return ClaimBusinessPage(docPath: docPath);
+          },
+        ),
+
         GoRoute(
           path: 'contact',
           name: 'contact',
@@ -208,15 +292,15 @@ final GoRouter appRouter = GoRouter(
           path: 'settings',
           pageBuilder: (context, state) => const NoTransitionPage(
             child: AppShell(
-              title: 'Settings', // overrides fallback if you want
-              child: SettingsPage(), // your user Settings UI
+              title: 'Settings',
+              child: SettingsPage(),
             ),
           ),
         ),
       ],
     ),
 
-    // -------- ADMIN --------
+    // -------- ADMIN (requires login via redirect above) --------
     GoRoute(
       path: '/admin',
       pageBuilder: (context, state) => const NoTransitionPage(
@@ -251,11 +335,16 @@ final GoRouter appRouter = GoRouter(
           },
         ),
 
+        GoRoute(
+          path: '/admin/claims',
+          name: 'adminClaims',
+          builder: (context, state) => const AdminClaimsPage(),
+        ),
+
         // /admin/attractions
         GoRoute(
           path: 'attractions',
           pageBuilder: (context, state) {
-            // Read filters from query params, e.g. /admin/attractions?stateId=GA&metroId=tallapoosa
             final stateId = state.uri.queryParameters['stateId'];
             final metroId = state.uri.queryParameters['metroId'];
 

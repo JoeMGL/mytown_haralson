@@ -3,6 +3,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/eat_and_drink.dart';
 
+import '../../../widgets/claim_banner.dart';
+
 class EatAndDrinkDetailsPage extends StatelessWidget {
   const EatAndDrinkDetailsPage({
     super.key,
@@ -180,6 +182,9 @@ class EatAndDrinkDetailsPage extends StatelessWidget {
                   icon: const Icon(Icons.map_outlined),
                   label: const Text('Open in Maps'),
                 ),
+              ClaimBanner(
+                docPath: 'eatAndDrink/${place.id}',
+              ),
             ],
           ),
         ],

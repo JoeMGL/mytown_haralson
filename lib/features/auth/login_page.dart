@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -26,17 +27,61 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
+      UserCredential cred;
+
       if (_isLogin) {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        // 🔐 Sign in
+        cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _email.trim(),
           password: _password.trim(),
+        );
+
+        // Optional: update lastLoginAt
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(cred.user!.uid)
+            .set(
+          {
+            'email': cred.user!.email,
+            'lastLoginAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
         );
       } else {
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        // 🧾 Register new user
+        final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _email.trim(),
           password: _password.trim(),
         );
+
+// Check isDisabled
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(cred.user!.uid)
+            .get();
+
+        if (doc.exists && doc.data()?['isDisabled'] == true) {
+          await FirebaseAuth.instance.signOut();
+          setState(() {
+            _error = 'Your account has been disabled. Please contact support.';
+          });
+          return;
+        }
+
+        // Create Firestore user doc with role
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(cred.user!.uid)
+            .set({
+          'email': cred.user!.email,
+          'createdAt': FieldValue.serverTimestamp(),
+          'lastLoginAt': FieldValue.serverTimestamp(),
+          // 👇 for now, make new account an admin so YOU can get in
+          'role': 'user', // later change default to 'user'
+        });
       }
+
+      // Navigation is handled by GoRouter redirect when authStateChanges fires
     } on FirebaseAuthException catch (e) {
       setState(() {
         _error = e.message;
@@ -118,9 +163,11 @@ class _LoginPageState extends State<LoginPage> {
                         _isLogin = !_isLogin;
                       });
                     },
-                    child: Text(_isLogin
-                        ? 'Need an account? Register'
-                        : 'Already have an account? Sign in'),
+                    child: Text(
+                      _isLogin
+                          ? 'Need an account? Register'
+                          : 'Already have an account? Sign in',
+                    ),
                   ),
                 ],
               ),
