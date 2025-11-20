@@ -133,7 +133,14 @@ class AdminShell extends StatelessWidget {
           const SizedBox(width: 12),
         ],
       ),
-      body: SafeArea(child: child),
+
+      // 🔑 KEY FIX: keep the same State for the current route
+      body: SafeArea(
+        child: KeyedSubtree(
+          key: ValueKey(uri),
+          child: child,
+        ),
+      ),
     );
   }
 }

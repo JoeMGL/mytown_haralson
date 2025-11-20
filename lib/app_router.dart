@@ -301,40 +301,72 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // -------- ADMIN (requires login via redirect above) --------
-    GoRoute(
-      path: '/admin',
-      pageBuilder: (context, state) => const NoTransitionPage(
-        child: AdminShell(
-          title: 'Dashboard',
-          child: AdminDashboardPage(),
-        ),
-      ),
+    ShellRoute(
+      builder: (context, state, child) {
+        final loc = state.matchedLocation;
+
+        // Simple title resolver based on current admin path
+        String title = 'Admin';
+        if (loc == '/admin') {
+          title = 'Dashboard';
+        } else if (loc.startsWith('/admin/feedback')) {
+          title = 'Feedback';
+        } else if (loc.startsWith('/admin/claims')) {
+          title = 'Claims';
+        } else if (loc.startsWith('/admin/attractions')) {
+          title = 'Attractions';
+        } else if (loc.startsWith('/admin/events')) {
+          title = 'Events';
+        } else if (loc.startsWith('/admin/eat')) {
+          title = 'Eat & Drink';
+        } else if (loc.startsWith('/admin/lodging')) {
+          title = 'Lodging';
+        } else if (loc.startsWith('/admin/shops')) {
+          title = 'Shops';
+        } else if (loc.startsWith('/admin/clubs')) {
+          title = 'Clubs & Groups';
+        } else if (loc.startsWith('/admin/users')) {
+          title = 'Users & Roles';
+        } else if (loc.startsWith('/admin/locations')) {
+          title = 'Locations';
+        } else if (loc.startsWith('/admin/sections')) {
+          title = 'Sections';
+        } else if (loc.startsWith('/admin/categories')) {
+          title = 'Categories';
+        } else if (loc.startsWith('/admin/settings')) {
+          title = 'Settings';
+        } else if (loc.startsWith('/admin/announcements')) {
+          title = 'Announcements';
+        }
+
+        return AdminShell(
+          title: title,
+          child: child,
+        );
+      },
       routes: [
+        // /admin (dashboard)
+        GoRoute(
+          path: '/admin',
+          builder: (context, state) => const AdminDashboardPage(),
+        ),
+
         // /admin/feedback
         GoRoute(
-          path: 'feedback',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Feedback',
-              child: AdminFeedbackPage(),
-            ),
-          ),
+          path: '/admin/feedback',
+          builder: (context, state) => const AdminFeedbackPage(),
         ),
 
         // /admin/feedback/:id
         GoRoute(
-          path: 'feedback/:id',
-          pageBuilder: (context, state) {
+          path: '/admin/feedback/:id',
+          builder: (context, state) {
             final id = state.pathParameters['id']!;
-            return NoTransitionPage(
-              child: AdminShell(
-                title: 'Feedback Detail',
-                child: AdminFeedbackDetailPage(id: id),
-              ),
-            );
+            return AdminFeedbackDetailPage(id: id);
           },
         ),
 
+        // /admin/claims
         GoRoute(
           path: '/admin/claims',
           name: 'adminClaims',
@@ -343,113 +375,72 @@ final GoRouter appRouter = GoRouter(
 
         // /admin/attractions
         GoRoute(
-          path: 'attractions',
-          pageBuilder: (context, state) {
+          path: '/admin/attractions',
+          builder: (context, state) {
             final stateId = state.uri.queryParameters['stateId'];
             final metroId = state.uri.queryParameters['metroId'];
 
-            return NoTransitionPage(
-              child: AdminShell(
-                title: 'Attractions',
-                child: AdminExplorePage(
-                  initialStateId: stateId,
-                  initialMetroId: metroId,
-                ),
-              ),
+            return AdminExplorePage(
+              initialStateId: stateId,
+              initialMetroId: metroId,
             );
           },
           routes: [
             GoRoute(
-              path: 'add',
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: AdminShell(
-                  title: 'Add Attraction',
-                  child: AddAttractionPage(),
-                ),
-              ),
+              path: 'add', // -> /admin/attractions/add
+              builder: (context, state) => const AddAttractionPage(),
             ),
             GoRoute(
-              path: 'edit',
+              path: 'edit', // -> /admin/attractions/edit
               name: 'adminEditAttraction',
-              pageBuilder: (context, state) {
+              builder: (context, state) {
                 final place = state.extra as Place;
-
-                return NoTransitionPage(
-                  child: AdminShell(
-                    title: 'Edit Attraction',
-                    child: EditAttractionPage(place: place),
-                  ),
-                );
+                return EditAttractionPage(place: place);
               },
             ),
             GoRoute(
-              path: 'categories',
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: AdminShell(
-                  title: 'Attraction Categories',
-                  child: AdminCategoriesPage(),
-                ),
-              ),
+              path: 'categories', // -> /admin/attractions/categories
+              builder: (context, state) => const AdminCategoriesPage(),
             ),
           ],
         ),
 
         // /admin/events
         GoRoute(
-          path: 'events',
-          pageBuilder: (context, state) {
+          path: '/admin/events',
+          builder: (context, state) {
             final stateId = state.uri.queryParameters['stateId'];
             final metroId = state.uri.queryParameters['metroId'];
 
-            return NoTransitionPage(
-              child: AdminShell(
-                title: 'Events',
-                child: AdminEventsPage(
-                  initialStateId: stateId,
-                  initialMetroId: metroId,
-                ),
-              ),
+            return AdminEventsPage(
+              initialStateId: stateId,
+              initialMetroId: metroId,
             );
           },
         ),
 
         // /admin/eat
         GoRoute(
-          path: 'eat',
-          pageBuilder: (context, state) {
+          path: '/admin/eat',
+          builder: (context, state) {
             final stateId = state.uri.queryParameters['stateId'];
             final metroId = state.uri.queryParameters['metroId'];
 
-            return NoTransitionPage(
-              child: AdminShell(
-                title: 'Eat',
-                child: AdminEatAndDrinkPage(
-                  initialStateId: stateId,
-                  initialMetroId: metroId,
-                ),
-              ),
+            return AdminEatAndDrinkPage(
+              initialStateId: stateId,
+              initialMetroId: metroId,
             );
           },
           routes: [
             GoRoute(
-              path: 'add',
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: AdminShell(
-                  title: 'Add Eat & Drink',
-                  child: AddEatAndDrinkPage(),
-                ),
-              ),
+              path: 'add', // -> /admin/eat/add
+              builder: (context, state) => const AddEatAndDrinkPage(),
             ),
             GoRoute(
-              path: 'edit',
-              pageBuilder: (context, state) {
+              path: 'edit', // -> /admin/eat/edit
+              builder: (context, state) {
                 final place = state.extra as EatAndDrink;
-                return NoTransitionPage(
-                  child: AdminShell(
-                    title: 'Edit Eat & Drink',
-                    child: EditEatAndDrinkPage(place: place),
-                  ),
-                );
+                return EditEatAndDrinkPage(place: place);
               },
             ),
           ],
@@ -457,41 +448,26 @@ final GoRouter appRouter = GoRouter(
 
         // /admin/shops
         GoRoute(
-          path: 'shops',
-          pageBuilder: (context, state) {
+          path: '/admin/shops',
+          builder: (context, state) {
             final stateId = state.uri.queryParameters['stateId'];
             final metroId = state.uri.queryParameters['metroId'];
 
-            return NoTransitionPage(
-              child: AdminShell(
-                title: 'Shops',
-                child: AdminShopsPage(
-                  initialStateId: stateId,
-                  initialMetroId: metroId,
-                ),
-              ),
+            return AdminShopsPage(
+              initialStateId: stateId,
+              initialMetroId: metroId,
             );
           },
           routes: [
             GoRoute(
-              path: 'add',
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: AdminShell(
-                  title: 'Add Shop / Business',
-                  child: AddShopPage(),
-                ),
-              ),
+              path: 'add', // -> /admin/shops/add
+              builder: (context, state) => const AddShopPage(),
             ),
             GoRoute(
-              path: 'edit',
-              pageBuilder: (context, state) {
+              path: 'edit', // -> /admin/shops/edit
+              builder: (context, state) {
                 final shop = state.extra as Shop;
-                return NoTransitionPage(
-                  child: AdminShell(
-                    title: 'Edit Shop / Business',
-                    child: EditShopPage(shop: shop),
-                  ),
-                );
+                return EditShopPage(shop: shop);
               },
             ),
           ],
@@ -499,41 +475,26 @@ final GoRouter appRouter = GoRouter(
 
         // /admin/lodging
         GoRoute(
-          path: 'lodging',
-          pageBuilder: (context, state) {
+          path: '/admin/lodging',
+          builder: (context, state) {
             final stateId = state.uri.queryParameters['stateId'];
             final metroId = state.uri.queryParameters['metroId'];
 
-            return NoTransitionPage(
-              child: AdminShell(
-                title: 'Lodging',
-                child: AdminLodgingPage(
-                  initialStateId: stateId,
-                  initialMetroId: metroId,
-                ),
-              ),
+            return AdminLodgingPage(
+              initialStateId: stateId,
+              initialMetroId: metroId,
             );
           },
           routes: [
             GoRoute(
-              path: 'add',
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: AdminShell(
-                  title: 'Add Lodging',
-                  child: AddLodgingPage(),
-                ),
-              ),
+              path: 'add', // -> /admin/lodging/add
+              builder: (context, state) => const AddLodgingPage(),
             ),
             GoRoute(
-              path: 'edit',
-              pageBuilder: (context, state) {
+              path: 'edit', // -> /admin/lodging/edit
+              builder: (context, state) {
                 final stay = state.extra as Stay;
-                return NoTransitionPage(
-                  child: AdminShell(
-                    title: 'Edit Lodging',
-                    child: EditLodgingPage(stay: stay),
-                  ),
-                );
+                return EditLodgingPage(stay: stay);
               },
             ),
           ],
@@ -541,99 +502,65 @@ final GoRouter appRouter = GoRouter(
 
         // /admin/clubs
         GoRoute(
-          path: 'clubs',
-          pageBuilder: (context, state) {
+          path: '/admin/clubs',
+          builder: (context, state) {
             final stateId = state.uri.queryParameters['stateId'];
             final metroId = state.uri.queryParameters['metroId'];
 
-            return NoTransitionPage(
-              child: AdminShell(
-                title: 'Clubs & Groups',
-                child: AdminClubsPage(
-                  initialStateId: stateId,
-                  initialMetroId: metroId,
-                ),
-              ),
+            return AdminClubsPage(
+              initialStateId: stateId,
+              initialMetroId: metroId,
             );
           },
-        ),
-        GoRoute(
-          path: 'clubs/add',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Add Club / Group',
-              child: AddClubPage(),
+          routes: [
+            GoRoute(
+              path: 'add', // -> /admin/clubs/add
+              builder: (context, state) => const AddClubPage(),
             ),
-          ),
-        ),
-        GoRoute(
-          path: 'clubs/edit',
-          pageBuilder: (context, state) {
-            final club = state.extra as Club;
-
-            return NoTransitionPage(
-              child: AdminShell(
-                title: 'Edit Club / Group',
-                child: EditClubPage(club: club),
-              ),
-            );
-          },
+            GoRoute(
+              path: 'edit', // -> /admin/clubs/edit
+              builder: (context, state) {
+                final club = state.extra as Club;
+                return EditClubPage(club: club);
+              },
+            ),
+          ],
         ),
 
+        // /admin/users
         GoRoute(
-          path: 'users',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Users & Roles',
-              child: UsersAndRolesPage(),
-            ),
-          ),
-        ),
-        GoRoute(
-          path: 'locations',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Locations',
-              child: AdminLocationSetupPage(),
-            ),
-          ),
-        ),
-        GoRoute(
-          path: 'sections',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Sections',
-              child: AdminSectionsPage(),
-            ),
-          ),
-        ),
-        GoRoute(
-          path: 'categories',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Categories',
-              child: AdminCategoriesPage(),
-            ),
-          ),
+          path: '/admin/users',
+          builder: (context, state) => const UsersAndRolesPage(),
         ),
 
+        // /admin/locations
         GoRoute(
-          path: 'settings',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Settings',
-              child: AdminSettingsPage(),
-            ),
-          ),
+          path: '/admin/locations',
+          builder: (context, state) => const AdminLocationSetupPage(),
         ),
+
+        // /admin/sections
         GoRoute(
-          path: 'announcements',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Announcements',
-              child: AddAnnouncementPage(),
-            ),
-          ),
+          path: '/admin/sections',
+          builder: (context, state) => const AdminSectionsPage(),
+        ),
+
+        // /admin/categories
+        GoRoute(
+          path: '/admin/categories',
+          builder: (context, state) => const AdminCategoriesPage(),
+        ),
+
+        // /admin/settings
+        GoRoute(
+          path: '/admin/settings',
+          builder: (context, state) => const AdminSettingsPage(),
+        ),
+
+        // /admin/announcements
+        GoRoute(
+          path: '/admin/announcements',
+          builder: (context, state) => const AddAnnouncementPage(),
         ),
       ],
     ),

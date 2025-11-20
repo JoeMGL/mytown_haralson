@@ -26,7 +26,7 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
   late TextEditingController _imageUrlController;
 
   // Core fields
-  String _city = 'Tallapoosa';
+  String _city = '';
   String _category = ''; // category slug from Firestore
   String _description = '';
   String _phone = '';
