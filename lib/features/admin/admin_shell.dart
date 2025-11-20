@@ -1,3 +1,4 @@
+// lib/features/admin/admin_shell.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,7 +19,8 @@ class AdminShell extends StatelessWidget {
     final isAdminRoute = uri.startsWith('/admin');
 
     return Scaffold(
-      drawer: const _AdminDrawer(),
+      // 🔹 Admin drawer on /admin..., User Dev drawer otherwise
+      drawer: isAdminRoute ? const _AdminDrawer() : const _UserDevDrawer(),
       appBar: AppBar(
         automaticallyImplyLeading: false,
         leading: Builder(
@@ -28,10 +30,10 @@ class AdminShell extends StatelessWidget {
             tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
           ),
         ),
-        title: Text(title ?? 'Admin Dashboard'),
+        title: Text(
+            title ?? (isAdminRoute ? 'Admin Dashboard' : 'Visit Haralson')),
         actions: [
-          // 🔽 DEV: Metro selector (backed by Firestore)
-          // User / Admin toggle buttons
+          // 🔁 Quick user/admin toggle
           _RoleButton(
             label: 'User',
             icon: Icons.person_outline,
@@ -106,10 +108,87 @@ class _AdminDrawer extends StatelessWidget {
             tile('Users & Roles', '/admin/users', Icons.group_outlined),
             tile('Add Locations', '/admin/locations',
                 Icons.location_city_outlined),
+
+            tile('Feedback', '/admin/feedback', Icons.feedback_outlined),
+
             tile('Manage Sections', '/admin/sections', Icons.category_rounded),
             tile('Manage Categories', '/admin/categories',
                 Icons.category_outlined),
             tile('Settings', '/admin/settings', Icons.settings_outlined),
+
+            const Divider(),
+
+            // Quick shortcut to user Home from admin drawer
+            ListTile(
+              leading: const Icon(Icons.home_outlined),
+              title: const Text('Go to User Home'),
+              onTap: () {
+                Navigator.of(context).pop();
+                context.go('/');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 🔹 Dev drawer for the USER side routes (matching app_router.dart)
+class _UserDevDrawer extends StatelessWidget {
+  const _UserDevDrawer();
+
+  @override
+  Widget build(BuildContext context) {
+    final uri = GoRouterState.of(context).uri.toString();
+
+    ListTile tile(String label, String route, IconData icon) {
+      final selected = uri == route || uri.startsWith('$route/');
+      return ListTile(
+        leading: Icon(icon),
+        title: Text(label),
+        selected: selected,
+        onTap: () {
+          Navigator.of(context).pop(); // close drawer
+          context.go(route);
+        },
+      );
+    }
+
+    return Drawer(
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            const ListTile(
+              title: Text(
+                'VISIT HARALSON',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text('User View (DEV)'),
+            ),
+            const Divider(),
+
+            // 🏠 Public/user routes (exactly as in app_router.dart)
+            tile('Home', '/', Icons.home_outlined),
+            tile('Explore', '/explore', Icons.explore_outlined),
+            tile('Events', '/events', Icons.event_outlined),
+            tile('Eat & Drink', '/eat', Icons.restaurant_outlined),
+            tile('Stay', '/stay', Icons.hotel_outlined),
+            tile('Clubs & Groups', '/clubs', Icons.groups_2_outlined),
+            tile('Shop Local', '/shop', Icons.storefront_outlined),
+
+            const Divider(),
+
+            // Back to Admin
+            ListTile(
+              leading: const Icon(Icons.admin_panel_settings_outlined),
+              title: const Text('Go to Admin'),
+              onTap: () {
+                Navigator.of(context).pop();
+                context.go('/admin');
+              },
+            ),
           ],
         ),
       ),
@@ -219,26 +298,14 @@ class _MetroDropdownState extends State<_MetroDropdown> {
               if (value == null) return;
               setState(() => _selectedPath = value);
 
-              // TODO: DEV ONLY
-              // Hook this into your "user view" location logic.
-              //
-              // For example later:
-              //   - Parse stateId + metroId from the path
-              //   - Update a LocationScope / provider
-              //   - Or pass it as a query param when navigating to / (user)
-              //
-              // final ref = FirebaseFirestore.instance.doc(value);
-              // final metroId = ref.id;
-              // final stateId = ref.parent.parent?.id;
+              // TODO: later hook this into your location provider.
             },
             items: docs.map((d) {
               final data = d.data();
               final name = (data['name'] as String?) ?? d.id;
-              // If you stored stateId on the metro doc, you can show it
               final stateId = data['stateId'] as String?;
               final label = stateId != null ? '$name ($stateId)' : name;
-
-              final path = d.reference.path; // unique value for this metro
+              final path = d.reference.path;
 
               return DropdownMenuItem<String>(
                 value: path,

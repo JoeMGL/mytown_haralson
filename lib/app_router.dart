@@ -23,6 +23,8 @@ import 'features/user/events/events_page.dart';
 import 'features/user/eat_and_drink/eat_and_drink_page.dart' as eat_list;
 import 'features/user/eat_and_drink/eat_and_drink_details_page.dart'
     as eat_details;
+import 'features/user/settings/settings_page.dart';
+import 'features/support/contact_feedback_page.dart';
 
 import 'features/user/stay/stay_page.dart';
 import 'features/user/shop/shop_page.dart';
@@ -57,6 +59,8 @@ import 'features/admin/clubs/add_club_page.dart';
 import 'features/admin/clubs/admin_clubs_page.dart';
 import 'features/admin/categories/admin_sections_page.dart';
 import 'features/admin/categories/admin_categories_page.dart';
+import 'features/admin/feedback/admin_feedback_detail_page.dart';
+import 'features/admin/feedback/admin_feedback_page.dart';
 import 'features/admin/config/global.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -194,6 +198,21 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+        GoRoute(
+          path: 'contact',
+          name: 'contact',
+          builder: (context, state) => const ContactFeedbackPage(),
+        ),
+
+        GoRoute(
+          path: 'settings',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AppShell(
+              title: 'Settings', // overrides fallback if you want
+              child: SettingsPage(), // your user Settings UI
+            ),
+          ),
+        ),
       ],
     ),
 
@@ -207,6 +226,31 @@ final GoRouter appRouter = GoRouter(
         ),
       ),
       routes: [
+        // /admin/feedback
+        GoRoute(
+          path: 'feedback',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: AdminShell(
+              title: 'Feedback',
+              child: AdminFeedbackPage(),
+            ),
+          ),
+        ),
+
+        // /admin/feedback/:id
+        GoRoute(
+          path: 'feedback/:id',
+          pageBuilder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return NoTransitionPage(
+              child: AdminShell(
+                title: 'Feedback Detail',
+                child: AdminFeedbackDetailPage(id: id),
+              ),
+            );
+          },
+        ),
+
         // /admin/attractions
         GoRoute(
           path: 'attractions',
@@ -483,6 +527,7 @@ final GoRouter appRouter = GoRouter(
             ),
           ),
         ),
+
         GoRoute(
           path: 'settings',
           pageBuilder: (context, state) => const NoTransitionPage(
