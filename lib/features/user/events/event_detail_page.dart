@@ -1,3 +1,4 @@
+// lib/features/events/event_detail_page.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,20 +19,41 @@ class EventDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    final headerUrl = event.imageUrl;
+    // Prefer banner if present, else main imageUrl
+    final headerUrl = event.bannerImageUrl.isNotEmpty
+        ? event.bannerImageUrl
+        : (event.imageUrl ?? '');
     final dateText = _formatEventDateRange(event.start, event.end);
+
+    // Build "City, ST ZIP"
+    final cityStateZip = _formatCityStateZip(
+      city: event.city,
+      state: event.state,
+      zip: event.zip,
+    );
+
+    // Full location line: Venue • Street • City, ST ZIP
     final locationText = [
       if (event.venue.isNotEmpty) event.venue,
-      if (event.city.isNotEmpty) event.city,
       if (event.address.isNotEmpty) event.address,
+      if (cityStateZip.isNotEmpty) cityStateZip,
     ].join(' • ');
+
+    final categoryLabel = _formatCategoryLabel(event.category);
+
+    // Build gallery list (exclude header to avoid obvious duplicate)
+    final galleryImages = event.galleryImageUrls
+        .where((u) => u.isNotEmpty)
+        .where((u) => u != headerUrl)
+        .toList();
 
     return Scaffold(
       appBar: AppBar(title: Text(event.title)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (headerUrl != null && headerUrl.isNotEmpty) ...[
+          // HEADER IMAGE
+          if (headerUrl.isNotEmpty) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: heroTag != null
@@ -58,6 +80,44 @@ class EventDetailPage extends StatelessWidget {
                         color: cs.surfaceContainerHighest,
                       ),
                     ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // 📸 GALLERY
+          if (galleryImages.isNotEmpty) ...[
+            Text(
+              'Photos',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 110,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: galleryImages.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final url = galleryImages[index];
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: AspectRatio(
+                      aspectRatio: 4 / 3,
+                      child: Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: cs.surfaceContainerHighest,
+                          child: const Icon(Icons.broken_image),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 16),
           ],
@@ -117,15 +177,20 @@ class EventDetailPage extends StatelessWidget {
             spacing: 8,
             runSpacing: 4,
             children: [
-              if (event.city.isNotEmpty)
+              if (event.city.isNotEmpty || event.state.isNotEmpty)
                 Chip(
-                  label: Text(event.city),
+                  label: Text(
+                    _formatCityState(
+                      city: event.city,
+                      state: event.state,
+                    ),
+                  ),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               if (event.category.isNotEmpty)
                 Chip(
-                  label: Text(event.category),
+                  label: Text(categoryLabel),
                   visualDensity: VisualDensity.compact,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -316,6 +381,42 @@ class EventDetailPage extends StatelessWidget {
     return months[m - 1];
   }
 
+  String _formatCityStateZip({
+    required String city,
+    required String state,
+    required String zip,
+  }) {
+    if (city.isEmpty && state.isEmpty && zip.isEmpty) return '';
+
+    final cityState = _formatCityState(city: city, state: state);
+    if (cityState.isEmpty) return zip;
+    if (zip.isEmpty) return cityState;
+    return '$cityState $zip';
+  }
+
+  String _formatCityState({
+    required String city,
+    required String state,
+  }) {
+    if (city.isEmpty && state.isEmpty) return '';
+    if (city.isEmpty) return state;
+    if (state.isEmpty) return city;
+    return '$city, $state';
+  }
+
+  /// Convert slug to nice label, e.g. "family-fun" → "Family Fun"
+  String _formatCategoryLabel(String slug) {
+    if (slug.isEmpty) return '';
+    final withSpaces = slug.replaceAll('-', ' ');
+    return withSpaces
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .map(
+          (w) => w[0].toUpperCase() + w.substring(1),
+        )
+        .join(' ');
+  }
+
   Future<void> _openWebsite() async {
     final url = event.website;
     if (url == null || url.isEmpty) return;
@@ -327,10 +428,19 @@ class EventDetailPage extends StatelessWidget {
 
   Future<void> _openMaps() async {
     final parts = <String>[];
+
     if (event.venue.isNotEmpty) parts.add(event.venue);
     if (event.address.isNotEmpty) parts.add(event.address);
-    if (event.city.isNotEmpty) parts.add(event.city);
-    parts.add(event.title);
+
+    final cityStateZip = _formatCityStateZip(
+      city: event.city,
+      state: event.state,
+      zip: event.zip,
+    );
+    if (cityStateZip.isNotEmpty) parts.add(cityStateZip);
+
+    // Include title as a fallback search hint
+    if (event.title.isNotEmpty) parts.add(event.title);
 
     final query = parts.join(' ');
     final encoded = Uri.encodeComponent(query);

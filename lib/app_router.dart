@@ -109,7 +109,6 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'eat',
           pageBuilder: (context, state) => NoTransitionPage(
-            // 🔹 remove `const` here to avoid const-eval issues
             child: const AppShell(
               title: 'Eat & Drink',
               child:
@@ -208,16 +207,25 @@ final GoRouter appRouter = GoRouter(
         ),
       ),
       routes: [
+        // /admin/attractions
         GoRoute(
           path: 'attractions',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Attractions',
-              child: AdminExplorePage(),
-            ),
-          ),
+          pageBuilder: (context, state) {
+            // Read filters from query params, e.g. /admin/attractions?stateId=GA&metroId=tallapoosa
+            final stateId = state.uri.queryParameters['stateId'];
+            final metroId = state.uri.queryParameters['metroId'];
+
+            return NoTransitionPage(
+              child: AdminShell(
+                title: 'Attractions',
+                child: AdminExplorePage(
+                  initialStateId: stateId,
+                  initialMetroId: metroId,
+                ),
+              ),
+            );
+          },
           routes: [
-            // /admin/attractions/add
             GoRoute(
               path: 'add',
               pageBuilder: (context, state) => const NoTransitionPage(
@@ -227,9 +235,6 @@ final GoRouter appRouter = GoRouter(
                 ),
               ),
             ),
-
-            // /admin/attractions/edit
-            // use .goNamed('adminEditAttraction', extra: place)
             GoRoute(
               path: 'edit',
               name: 'adminEditAttraction',
@@ -244,7 +249,6 @@ final GoRouter appRouter = GoRouter(
                 );
               },
             ),
-            // /admin/attractions/categories  (optional, but handy)
             GoRoute(
               path: 'categories',
               pageBuilder: (context, state) => const NoTransitionPage(
@@ -256,23 +260,43 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+
+        // /admin/events
         GoRoute(
           path: 'events',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Events',
-              child: AdminEventsPage(),
-            ),
-          ),
+          pageBuilder: (context, state) {
+            final stateId = state.uri.queryParameters['stateId'];
+            final metroId = state.uri.queryParameters['metroId'];
+
+            return NoTransitionPage(
+              child: AdminShell(
+                title: 'Events',
+                child: AdminEventsPage(
+                  initialStateId: stateId,
+                  initialMetroId: metroId,
+                ),
+              ),
+            );
+          },
         ),
+
+        // /admin/eat
         GoRoute(
           path: 'eat',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Eat',
-              child: AdminEatAndDrinkPage(),
-            ),
-          ),
+          pageBuilder: (context, state) {
+            final stateId = state.uri.queryParameters['stateId'];
+            final metroId = state.uri.queryParameters['metroId'];
+
+            return NoTransitionPage(
+              child: AdminShell(
+                title: 'Eat',
+                child: AdminEatAndDrinkPage(
+                  initialStateId: stateId,
+                  initialMetroId: metroId,
+                ),
+              ),
+            );
+          },
           routes: [
             GoRoute(
               path: 'add',
@@ -297,14 +321,24 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+
+        // /admin/shops
         GoRoute(
           path: 'shops',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Shops',
-              child: AdminShopsPage(),
-            ),
-          ),
+          pageBuilder: (context, state) {
+            final stateId = state.uri.queryParameters['stateId'];
+            final metroId = state.uri.queryParameters['metroId'];
+
+            return NoTransitionPage(
+              child: AdminShell(
+                title: 'Shops',
+                child: AdminShopsPage(
+                  initialStateId: stateId,
+                  initialMetroId: metroId,
+                ),
+              ),
+            );
+          },
           routes: [
             GoRoute(
               path: 'add',
@@ -329,14 +363,24 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+
+        // /admin/lodging
         GoRoute(
           path: 'lodging',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Lodging',
-              child: AdminLodgingPage(),
-            ),
-          ),
+          pageBuilder: (context, state) {
+            final stateId = state.uri.queryParameters['stateId'];
+            final metroId = state.uri.queryParameters['metroId'];
+
+            return NoTransitionPage(
+              child: AdminShell(
+                title: 'Lodging',
+                child: AdminLodgingPage(
+                  initialStateId: stateId,
+                  initialMetroId: metroId,
+                ),
+              ),
+            );
+          },
           routes: [
             GoRoute(
               path: 'add',
@@ -361,14 +405,24 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
+
+        // /admin/clubs
         GoRoute(
           path: 'clubs',
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: AdminShell(
-              title: 'Clubs & Groups',
-              child: AdminClubsPage(),
-            ),
-          ),
+          pageBuilder: (context, state) {
+            final stateId = state.uri.queryParameters['stateId'];
+            final metroId = state.uri.queryParameters['metroId'];
+
+            return NoTransitionPage(
+              child: AdminShell(
+                title: 'Clubs & Groups',
+                child: AdminClubsPage(
+                  initialStateId: stateId,
+                  initialMetroId: metroId,
+                ),
+              ),
+            );
+          },
         ),
         GoRoute(
           path: 'clubs/add',
@@ -392,6 +446,7 @@ final GoRouter appRouter = GoRouter(
             );
           },
         ),
+
         GoRoute(
           path: 'users',
           pageBuilder: (context, state) => const NoTransitionPage(

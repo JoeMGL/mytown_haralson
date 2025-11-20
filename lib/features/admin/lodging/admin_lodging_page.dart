@@ -5,7 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../models/lodging.dart';
 
 class AdminLodgingPage extends StatefulWidget {
-  const AdminLodgingPage({super.key});
+  const AdminLodgingPage({
+    super.key,
+    this.initialStateId,
+    this.initialMetroId,
+  });
+
+  final String? initialStateId;
+  final String? initialMetroId;
 
   @override
   State<AdminLodgingPage> createState() => _AdminLodgingPageState();
@@ -18,6 +25,20 @@ class _AdminLodgingPageState extends State<AdminLodgingPage> {
   String? _filterStateId;
   String? _filterMetroId;
   String? _filterAreaId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seed filters from the router (dashboard → admin)
+    _filterStateId =
+        (widget.initialStateId != null && widget.initialStateId!.isNotEmpty)
+            ? widget.initialStateId
+            : null;
+    _filterMetroId =
+        (widget.initialMetroId != null && widget.initialMetroId!.isNotEmpty)
+            ? widget.initialMetroId
+            : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,9 +92,22 @@ class _AdminLodgingPageState extends State<AdminLodgingPage> {
             }
           }
 
-          final stateOptions = <String?>{null, ...stateLabels.keys};
-          final metroOptions = <String?>{null, ...metroLabels.keys};
-          final areaOptions = <String?>{null, ...areaLabels.keys};
+          // Include any current filters in options so dropdowns stay valid
+          final stateOptions = <String?>{
+            null,
+            if (_filterStateId != null) _filterStateId,
+            ...stateLabels.keys,
+          };
+          final metroOptions = <String?>{
+            null,
+            if (_filterMetroId != null) _filterMetroId,
+            ...metroLabels.keys,
+          };
+          final areaOptions = <String?>{
+            null,
+            if (_filterAreaId != null) _filterAreaId,
+            ...areaLabels.keys,
+          };
 
           // Filters
           final filteredStays = allStays.where((stay) {
@@ -82,15 +116,21 @@ class _AdminLodgingPageState extends State<AdminLodgingPage> {
 
             if (_filterStateId != null &&
                 _filterStateId!.isNotEmpty &&
-                stay.stateId != _filterStateId) return false;
+                stay.stateId != _filterStateId) {
+              return false;
+            }
 
             if (_filterMetroId != null &&
                 _filterMetroId!.isNotEmpty &&
-                stay.metroId != _filterMetroId) return false;
+                stay.metroId != _filterMetroId) {
+              return false;
+            }
 
             if (_filterAreaId != null &&
                 _filterAreaId!.isNotEmpty &&
-                stay.areaId != _filterAreaId) return false;
+                stay.areaId != _filterAreaId) {
+              return false;
+            }
 
             return true;
           }).toList();
@@ -272,7 +312,7 @@ class _AdminLodgingPageState extends State<AdminLodgingPage> {
                               style: const TextStyle(fontSize: 11),
                             ),
 
-                          // ✅ Hours display: prefer structured hours indicator, fall back to legacy text
+                          // Hours: prefer structured indicator, fall back to legacy text
                           if (hasStructuredHours)
                             Text(
                               'Hours schedule set',

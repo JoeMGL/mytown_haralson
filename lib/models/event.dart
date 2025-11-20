@@ -5,10 +5,15 @@ class Event {
   final String id;
 
   final String title;
+
+  // Address pieces
+  final String address; // street line 1
   final String city;
+  final String state;
+  final String zip;
+
   final String category;
   final String venue;
-  final String address;
 
   final String description;
   final String? website;
@@ -21,9 +26,13 @@ class Event {
   final DateTime start;
   final DateTime end;
 
-  final String? imageUrl; // optional, for future use
+  final String? imageUrl; // main image
   final List<String> tags;
   final List<String> search;
+
+  // 🔹 New: gallery + banner
+  final List<String> galleryImageUrls;
+  final String bannerImageUrl;
 
   // 🔹 Location fields (mirroring Clubs)
   final String stateId;
@@ -36,10 +45,12 @@ class Event {
   Event({
     required this.id,
     required this.title,
+    required this.address,
     required this.city,
+    required this.state,
+    required this.zip,
     required this.category,
     required this.venue,
-    required this.address,
     required this.description,
     required this.website,
     required this.featured,
@@ -51,6 +62,8 @@ class Event {
     required this.imageUrl,
     required this.tags,
     required this.search,
+    this.galleryImageUrls = const [],
+    this.bannerImageUrl = '',
     this.stateId = '',
     this.stateName = '',
     this.metroId = '',
@@ -66,10 +79,12 @@ class Event {
     return Event(
       id: doc.id,
       title: (data['title'] ?? '') as String,
+      address: (data['address'] ?? '') as String,
       city: (data['city'] ?? '') as String,
+      state: (data['state'] ?? '') as String,
+      zip: (data['zip'] ?? '') as String,
       category: (data['category'] ?? '') as String,
       venue: (data['venue'] ?? '') as String,
-      address: (data['address'] ?? '') as String,
       description: (data['description'] ?? '') as String,
       website: data['website'] as String?,
       featured: (data['featured'] ?? false) as bool,
@@ -81,6 +96,11 @@ class Event {
       imageUrl: data['imageUrl'] as String?,
       tags: (data['tags'] as List?)?.cast<String>() ?? const [],
       search: (data['search'] as List?)?.cast<String>() ?? const [],
+
+      // 🔹 New gallery fields (safe defaults for old docs)
+      galleryImageUrls:
+          (data['galleryImageUrls'] as List?)?.cast<String>() ?? const [],
+      bannerImageUrl: (data['bannerImageUrl'] ?? '') as String,
 
       // 🔹 Location (safe defaults for old docs)
       stateId: (data['stateId'] ?? '') as String,
@@ -96,10 +116,12 @@ class Event {
   Map<String, dynamic> toMap() {
     return {
       'title': title,
+      'address': address,
       'city': city,
+      'state': state,
+      'zip': zip,
       'category': category,
       'venue': venue,
-      'address': address,
       'description': description,
       'website': website,
       'featured': featured,
@@ -111,6 +133,10 @@ class Event {
       'imageUrl': imageUrl,
       'tags': tags,
       'search': search,
+
+      // 🔹 Gallery fields
+      'galleryImageUrls': galleryImageUrls,
+      'bannerImageUrl': bannerImageUrl.isEmpty ? null : bannerImageUrl,
 
       // 🔹 Location
       'stateId': stateId,

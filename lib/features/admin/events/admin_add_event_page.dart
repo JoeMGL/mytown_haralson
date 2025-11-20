@@ -3,10 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/event.dart';
+import '../../../models/category.dart';
 import '../../../widgets/location_selector.dart';
+import '../../../widgets/image_editor_page.dart';
+
+/// Must match the `section` value in your `categories` docs for events.
+const String kEventsSectionSlug = 'events';
 
 class AddEventPage extends StatefulWidget {
   const AddEventPage({super.key});
+
   @override
   State<AddEventPage> createState() => _AddEventPageState();
 }
@@ -14,11 +20,18 @@ class AddEventPage extends StatefulWidget {
 class _AddEventPageState extends State<AddEventPage> {
   final _form = GlobalKey<FormState>();
 
-  String _title = '';
-  String _city = '';
-  String _category = 'Festival';
+  // Controllers for fields that must round-trip perfectly
+  late TextEditingController _titleController;
+  late TextEditingController _imageUrlController;
+
+  // Core fields
+  String _category = ''; // category slug from Firestore
   String _venue = '';
-  String _address = '';
+  String _address = ''; // street
+  String _city = 'Tallapoosa';
+  String _state = 'GA';
+  String _zip = '';
+
   String _externalLink = '';
   String _description = '';
 
@@ -40,18 +53,94 @@ class _AddEventPageState extends State<AddEventPage> {
   String? _areaId;
   String? _areaName;
 
-  static const _categories = [
-    'Festival',
-    'Music',
-    'Food & Drink',
-    'Family',
-    'Sports',
-    'Market',
-    'Arts',
-    'Government',
-    'Community',
-    'Other',
-  ];
+  // Dynamic categories
+  List<Category> _categories = [];
+  bool _loadingCategories = true;
+  String? _categoriesError;
+
+  // Images
+  List<String> _imageUrls = []; // gallery
+  String _bannerImageUrl = ''; // hero / banner
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController();
+    _imageUrlController = TextEditingController();
+    _loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _imageUrlController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('categories')
+          .where('section', isEqualTo: kEventsSectionSlug)
+          .orderBy('sortOrder')
+          .get();
+
+      final cats = snap.docs.map((d) => Category.fromDoc(d)).toList();
+
+      setState(() {
+        _categories = cats;
+        _loadingCategories = false;
+
+        if (_categories.isNotEmpty) {
+          _category = _categories.first.slug;
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _categoriesError = 'Error loading categories: $e';
+        _loadingCategories = false;
+      });
+    }
+  }
+
+  Future<void> _editGalleryImages() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => ImageUrlsEditorPage(
+          initialUrls: _imageUrls,
+          title: 'Gallery images',
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _imageUrls = result;
+        if (_imageUrls.isNotEmpty && _imageUrlController.text.isEmpty) {
+          _imageUrlController.text = _imageUrls.first;
+        }
+      });
+    }
+  }
+
+  Future<void> _editBannerImage() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(
+        builder: (_) => ImageUrlsEditorPage(
+          initialUrls:
+              _bannerImageUrl.isEmpty ? <String>[] : <String>[_bannerImageUrl],
+          title: 'Banner image',
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _bannerImageUrl =
+            result.isNotEmpty ? result.first : ''; // clear if empty list
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +149,7 @@ class _AddEventPageState extends State<AddEventPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Add Event'),
+        automaticallyImplyLeading: false,
       ),
       body: AbsorbPointer(
         absorbing: _saving,
@@ -68,17 +158,62 @@ class _AddEventPageState extends State<AddEventPage> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              // --- BASIC INFO ---
+              // TITLE
               TextFormField(
-                decoration: const InputDecoration(labelText: 'Title'),
-                onSaved: (v) => _title = v?.trim() ?? '',
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Event name'),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Required' : null,
                 textCapitalization: TextCapitalization.words,
               ),
               const SizedBox(height: 12),
 
-              // City (free text instead of dropdown)
+              // CATEGORY (dynamic, slug)
+              if (_loadingCategories)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(),
+                )
+              else if (_categoriesError != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    _categoriesError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                )
+              else
+                DropdownButtonFormField<String>(
+                  value: _category.isEmpty ? null : _category,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: _categories
+                      .map(
+                        (c) => DropdownMenuItem<String>(
+                          value: c.slug,
+                          child: Text(c.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setState(() => _category = v);
+                  },
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Please select a category'
+                      : null,
+                ),
+              const SizedBox(height: 12),
+
+              // ADDRESS FIELDS
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'Street address'),
+                onSaved: (v) => _address = v?.trim() ?? '',
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
+
               TextFormField(
                 initialValue: _city,
                 decoration: const InputDecoration(labelText: 'City'),
@@ -87,17 +222,23 @@ class _AddEventPageState extends State<AddEventPage> {
               ),
               const SizedBox(height: 12),
 
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (v) => setState(() => _category = v ?? _category),
+              TextFormField(
+                initialValue: _state,
+                decoration: const InputDecoration(labelText: 'State'),
+                onSaved: (v) => _state = v?.trim() ?? '',
+                textCapitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                initialValue: _zip,
+                decoration: const InputDecoration(labelText: 'ZIP Code'),
+                keyboardType: TextInputType.number,
+                onSaved: (v) => _zip = v?.trim() ?? '',
               ),
               const SizedBox(height: 16),
 
-              // --- LOCATION SELECTOR (STATE / METRO / AREA) ---
+              // LOCATION SELECTOR (state/metro/area)
               LocationSelector(
                 initialStateId: _stateId,
                 initialMetroId: _metroId,
@@ -113,33 +254,64 @@ class _AddEventPageState extends State<AddEventPage> {
                   });
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
+              // VENUE
               TextFormField(
                 decoration: const InputDecoration(labelText: 'Venue'),
                 onSaved: (v) => _venue = v?.trim() ?? '',
                 textCapitalization: TextCapitalization.words,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-              TextFormField(
-                decoration: const InputDecoration(labelText: 'Address'),
-                onSaved: (v) => _address = v?.trim() ?? '',
-                textCapitalization: TextCapitalization.words,
+              // IMAGES (gallery + banner + main url)
+              ListTile(
+                title: const Text('Gallery images'),
+                subtitle: Text(
+                  _imageUrls.isEmpty
+                      ? 'Tap to add images'
+                      : '${_imageUrls.length} image(s) selected',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _editGalleryImages,
+              ),
+              const SizedBox(height: 8),
+
+              ListTile(
+                title: const Text('Banner / hero image'),
+                subtitle: Text(
+                  _bannerImageUrl.isEmpty
+                      ? 'Tap to choose banner image'
+                      : 'Banner image selected',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _editBannerImage,
               ),
               const SizedBox(height: 12),
 
               TextFormField(
+                controller: _imageUrlController,
+                decoration: const InputDecoration(
+                  labelText: 'Main image URL',
+                  hintText: 'https://...',
+                ),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 12),
+
+              // DESCRIPTION
+              TextFormField(
                 decoration:
-                    const InputDecoration(labelText: 'Short Description'),
+                    const InputDecoration(labelText: 'Short description'),
                 maxLines: 3,
                 onSaved: (v) => _description = v?.trim() ?? '',
               ),
               const SizedBox(height: 12),
 
+              // WEBSITE
               TextFormField(
                 decoration: const InputDecoration(
-                  labelText: 'External Link (optional)',
+                  labelText: 'External link (optional)',
                   hintText: 'https://example.com',
                 ),
                 keyboardType: TextInputType.url,
@@ -147,7 +319,7 @@ class _AddEventPageState extends State<AddEventPage> {
               ),
               const SizedBox(height: 16),
 
-              // --- TIME ---
+              // TIME
               SwitchListTile(
                 value: _allDay,
                 onChanged: (v) {
@@ -212,7 +384,7 @@ class _AddEventPageState extends State<AddEventPage> {
               ),
               const SizedBox(height: 16),
 
-              // --- PRICE ---
+              // PRICE
               Row(
                 children: [
                   Expanded(
@@ -259,7 +431,7 @@ class _AddEventPageState extends State<AddEventPage> {
               ),
               const SizedBox(height: 16),
 
-              // --- FLAGS ---
+              // FLAGS
               SwitchListTile(
                 value: _featured,
                 onChanged: (v) => setState(() => _featured = v),
@@ -267,7 +439,6 @@ class _AddEventPageState extends State<AddEventPage> {
               ),
               const SizedBox(height: 24),
 
-              // --- SAVE BUTTON ---
               FilledButton.icon(
                 onPressed: _saving ? null : _submit,
                 icon: _saving
@@ -290,7 +461,6 @@ class _AddEventPageState extends State<AddEventPage> {
     if (!_form.currentState!.validate()) return;
     _form.currentState!.save();
 
-    // Require state + metro like Clubs
     if (_stateId == null || _metroId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -306,56 +476,65 @@ class _AddEventPageState extends State<AddEventPage> {
     }
 
     setState(() => _saving = true);
+
     try {
+      final title = _titleController.text.trim();
+      final imageUrl = _imageUrlController.text.trim();
+      final website =
+          _externalLink.trim().isEmpty ? null : _externalLink.trim();
+
       final event = Event(
-        id: '', // Firestore will assign
-        title: _title.trim(),
-        city: _city,
-        category: _category,
-        venue: _venue.trim(),
+        id: '',
+        title: title,
         address: _address.trim(),
+        city: _city.trim(),
+        state: _state.trim(),
+        zip: _zip.trim(),
+        category: _category, // slug
+        venue: _venue.trim(),
         description: _description.trim(),
-        website: _externalLink.trim().isEmpty ? null : _externalLink.trim(),
+        website: website,
         featured: _featured,
         allDay: _allDay,
         free: _free,
         price: _free ? 0 : (_price ?? 0),
         start: _start,
         end: _end,
-        imageUrl: null,
+        imageUrl: imageUrl.isEmpty ? null : imageUrl,
         tags: const [],
         search: [
-          _title.toLowerCase(),
+          title.toLowerCase(),
           _city.toLowerCase(),
           _category.toLowerCase(),
           _venue.toLowerCase(),
         ],
+        stateId: _stateId ?? '',
+        stateName: _stateName ?? '',
+        metroId: _metroId ?? '',
+        metroName: _metroName ?? '',
+        areaId: _areaId ?? '',
+        areaName: _areaName ?? '',
       );
 
       await FirebaseFirestore.instance.collection('events').add({
         ...event.toMap(),
-        // Location
-        'stateId': _stateId,
-        'stateName': _stateName ?? '',
-        'metroId': _metroId,
-        'metroName': _metroName ?? '',
-        'areaId': _areaId,
-        'areaName': _areaName ?? '',
+        // extra image metadata (optional)
+        'galleryImageUrls': _imageUrls,
+        'bannerImageUrl': _bannerImageUrl.isEmpty ? null : _bannerImageUrl,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Event saved to Firestore ✅')),
-        );
-        Navigator.of(context).pop();
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Event saved to Firestore ✅')),
+      );
+      Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Save failed: $e')),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -386,7 +565,9 @@ class _AddEventPageState extends State<AddEventPage> {
 
     setState(() {
       _start = DateTime(d.year, d.month, d.day, t.hour, t.minute);
-      if (!_end.isAfter(_start)) _end = _start.add(const Duration(hours: 1));
+      if (!_end.isAfter(_start)) {
+        _end = _start.add(const Duration(hours: 1));
+      }
     });
   }
 

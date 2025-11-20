@@ -55,11 +55,6 @@ class _AddClubPageState extends State<AddClubPage> {
   String _postalState = '';
   String _zip = '';
 
-  // Loaded location docs (not currently shown in UI, but can be reused if needed)
-  List<QueryDocumentSnapshot> _states = [];
-  List<QueryDocumentSnapshot> _metros = [];
-  List<QueryDocumentSnapshot> _areas = [];
-
   // Dynamic categories for Clubs section
   List<Category> _categories = [];
   bool _loadingCategories = true;
@@ -71,7 +66,6 @@ class _AddClubPageState extends State<AddClubPage> {
     _nameController = TextEditingController();
     _bannerController = TextEditingController();
     _descriptionController = TextEditingController();
-    _loadStates();
     _loadCategories(); // load club categories from Firestore
   }
 
@@ -81,83 +75,6 @@ class _AddClubPageState extends State<AddClubPage> {
     _bannerController.dispose();
     _descriptionController.dispose();
     super.dispose();
-  }
-
-  // ─────────────────────────────
-  // Location loading
-  // ─────────────────────────────
-  Future<void> _loadStates() async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('states')
-          .orderBy('name')
-          .get();
-
-      setState(() {
-        _states = snap.docs;
-
-        // Optionally auto-select first state and load its metros
-        if (_states.isNotEmpty && _stateId == null) {
-          final first = _states.first;
-          _stateId = first.id;
-          final data = first.data() as Map<String, dynamic>;
-          _stateName = data['name'] ?? '';
-          _loadMetros();
-        }
-      });
-    } catch (e) {
-      debugPrint('Error loading states: $e');
-    }
-  }
-
-  Future<void> _loadMetros() async {
-    if (_stateId == null) return;
-
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('states')
-          .doc(_stateId)
-          .collection('metros')
-          .where('isActive', isEqualTo: true)
-          .orderBy('sortOrder')
-          .get();
-
-      setState(() {
-        _metros = snap.docs;
-        _metroId = null;
-        _metroName = null;
-
-        // reset areas when metros change
-        _areas = [];
-        _areaId = null;
-        _areaName = null;
-      });
-    } catch (e) {
-      debugPrint('Error loading metros: $e');
-    }
-  }
-
-  Future<void> _loadAreas() async {
-    if (_stateId == null || _metroId == null) return;
-
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('states')
-          .doc(_stateId)
-          .collection('metros')
-          .doc(_metroId)
-          .collection('areas')
-          .orderBy('name')
-          .get();
-
-      setState(() {
-        _areas = snap.docs;
-        _areaId = null;
-        _areaName = null;
-      });
-    } catch (e) {
-      debugPrint('Error loading areas: $e');
-    }
   }
 
   // ─────────────────────────────
@@ -287,7 +204,7 @@ class _AddClubPageState extends State<AddClubPage> {
         'featured': _featured,
         'active': true,
 
-        // Location
+        // Location (IDs + pretty names for AdminClubsPage)
         'stateId': _stateId,
         'stateName': _stateName ?? '',
         'metroId': _metroId,

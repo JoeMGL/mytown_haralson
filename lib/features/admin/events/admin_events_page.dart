@@ -4,10 +4,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/event.dart';
 import '../events/admin_add_event_page.dart';
-import 'admin_events_details_page.dart';
+import 'admin_edit_event_page.dart';
 
 class AdminEventsPage extends StatefulWidget {
-  const AdminEventsPage({super.key});
+  const AdminEventsPage({
+    super.key,
+    this.initialStateId,
+    this.initialMetroId,
+  });
+
+  final String? initialStateId;
+  final String? initialMetroId;
 
   @override
   State<AdminEventsPage> createState() => _AdminEventsPageState();
@@ -21,6 +28,20 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
   String? _filterStateId;
   String? _filterMetroId;
   String? _filterAreaId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seed filters from router (dashboard → admin)
+    _filterStateId =
+        (widget.initialStateId != null && widget.initialStateId!.isNotEmpty)
+            ? widget.initialStateId
+            : null;
+    _filterMetroId =
+        (widget.initialMetroId != null && widget.initialMetroId!.isNotEmpty)
+            ? widget.initialMetroId
+            : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,26 +95,49 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
             }
           }
 
+          // 🔹 Effective filters (only if the id actually appears in data)
+          final String? effectiveStateFilter = (_filterStateId != null &&
+                  stateLabels.containsKey(_filterStateId))
+              ? _filterStateId
+              : null;
+
+          final String? effectiveMetroFilter = (_filterMetroId != null &&
+                  metroLabels.containsKey(_filterMetroId))
+              ? _filterMetroId
+              : null;
+
+          final String? effectiveAreaFilter =
+              (_filterAreaId != null && areaLabels.containsKey(_filterAreaId))
+                  ? _filterAreaId
+                  : null;
+
+          // Option sets (only real keys + null)
           final stateOptions = <String?>{null, ...stateLabels.keys};
           final metroOptions = <String?>{null, ...metroLabels.keys};
           final areaOptions = <String?>{null, ...areaLabels.keys};
 
-          // Apply filters in memory
+          // Apply filters in memory using effective filters
           final filteredEvents = allEvents.where((event) {
             if (_featuredOnly && !event.featured) return false;
             if (_freeOnly && !event.free) return false;
 
-            if (_filterStateId != null &&
-                _filterStateId!.isNotEmpty &&
-                event.stateId != _filterStateId) return false;
+            if (effectiveStateFilter != null &&
+                effectiveStateFilter.isNotEmpty &&
+                event.stateId != effectiveStateFilter) {
+              return false;
+            }
 
-            if (_filterMetroId != null &&
-                _filterMetroId!.isNotEmpty &&
-                event.metroId != _filterMetroId) return false;
+            if (effectiveMetroFilter != null &&
+                effectiveMetroFilter.isNotEmpty &&
+                event.metroId != effectiveMetroFilter) {
+              return false;
+            }
 
-            if (_filterAreaId != null &&
-                _filterAreaId!.isNotEmpty &&
-                event.areaId != _filterAreaId) return false;
+            if (effectiveAreaFilter != null &&
+                effectiveAreaFilter.isNotEmpty &&
+                event.areaId != effectiveAreaFilter) {
+              return false;
+            }
 
             return true;
           }).toList();
@@ -134,7 +178,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: _filterStateId,
+                            value: effectiveStateFilter,
                             isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'State filter',
@@ -165,7 +209,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: _filterMetroId,
+                            value: effectiveMetroFilter,
                             isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Metro filter',
@@ -199,7 +243,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
                     // Area filter
                     DropdownButtonFormField<String>(
-                      value: _filterAreaId,
+                      value: effectiveAreaFilter,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Area filter',
@@ -230,7 +274,7 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
 
               const Divider(height: 1),
 
-              // LIST (mirrors Clubs list style)
+              // LIST (now with thumbnail image)
               Expanded(
                 child: ListView.separated(
                   padding: const EdgeInsets.all(16),
@@ -259,7 +303,38 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                             ? 'From \$${event.price.toStringAsFixed(2)}'
                             : 'Admission info not set');
 
+                    final thumbUrl = event.imageUrl ?? '';
+
                     return ListTile(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => EditEventPage(event: event),
+                          ),
+                        );
+                      },
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: thumbUrl.isNotEmpty
+                            ? Image.network(
+                                thumbUrl,
+                                width: 56,
+                                height: 56,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  width: 56,
+                                  height: 56,
+                                  color: cs.surfaceContainerHighest,
+                                  child: const Icon(Icons.event),
+                                ),
+                              )
+                            : Container(
+                                width: 56,
+                                height: 56,
+                                color: cs.surfaceContainerHighest,
+                                child: const Icon(Icons.event),
+                              ),
+                      ),
                       title: Text(
                         event.title,
                         style: TextStyle(
@@ -342,21 +417,6 @@ class _AdminEventsPageState extends State<AdminEventsPage> {
                               ),
                             ),
                           ),
-
-                          // View details
-                          IconButton(
-                            tooltip: 'View',
-                            icon: const Icon(Icons.visibility),
-                            onPressed: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      AdminEventDetailPage(event: event),
-                                ),
-                              );
-                            },
-                          ),
-
                           // Delete
                           IconButton(
                             tooltip: 'Delete',

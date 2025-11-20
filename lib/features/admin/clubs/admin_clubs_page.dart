@@ -6,7 +6,14 @@ import 'package:go_router/go_router.dart';
 import '../../../models/clubs_model.dart';
 
 class AdminClubsPage extends StatefulWidget {
-  const AdminClubsPage({super.key});
+  const AdminClubsPage({
+    super.key,
+    this.initialStateId,
+    this.initialMetroId,
+  });
+
+  final String? initialStateId;
+  final String? initialMetroId;
 
   @override
   State<AdminClubsPage> createState() => _AdminClubsPageState();
@@ -20,6 +27,20 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
   String? _filterStateId;
   String? _filterMetroId;
   String? _filterAreaId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seed filters from the router (dashboard → admin)
+    _filterStateId =
+        (widget.initialStateId != null && widget.initialStateId!.isNotEmpty)
+            ? widget.initialStateId
+            : null;
+    _filterMetroId =
+        (widget.initialMetroId != null && widget.initialMetroId!.isNotEmpty)
+            ? widget.initialMetroId
+            : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,10 +95,22 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
             }
           }
 
-          // Build option sets (include null for "All …")
-          final stateOptions = <String?>{null, ...stateLabels.keys};
-          final metroOptions = <String?>{null, ...metroLabels.keys};
-          final areaOptions = <String?>{null, ...areaLabels.keys};
+          // Build option sets (include current filters so dropdown stays valid)
+          final stateOptions = <String?>{
+            null,
+            if (_filterStateId != null) _filterStateId,
+            ...stateLabels.keys,
+          };
+          final metroOptions = <String?>{
+            null,
+            if (_filterMetroId != null) _filterMetroId,
+            ...metroLabels.keys,
+          };
+          final areaOptions = <String?>{
+            null,
+            if (_filterAreaId != null) _filterAreaId,
+            ...areaLabels.keys,
+          };
 
           // Apply filters in memory
           final filteredClubs = allClubs.where((club) {
@@ -209,7 +242,7 @@ class _AdminClubsPageState extends State<AdminClubsPage> {
                             (areaId) => DropdownMenuItem(
                               value: areaId,
                               child: Text(
-                                areaId == null || areaId.isNotEmpty == false
+                                areaId == null || areaId.isEmpty
                                     ? 'All areas'
                                     : areaLabels[areaId] ?? areaId,
                               ),

@@ -6,7 +6,14 @@ import 'package:go_router/go_router.dart';
 import '../../../models/shop.dart';
 
 class AdminShopsPage extends StatefulWidget {
-  const AdminShopsPage({super.key});
+  const AdminShopsPage({
+    super.key,
+    this.initialStateId,
+    this.initialMetroId,
+  });
+
+  final String? initialStateId;
+  final String? initialMetroId;
 
   @override
   State<AdminShopsPage> createState() => _AdminShopsPageState();
@@ -19,6 +26,20 @@ class _AdminShopsPageState extends State<AdminShopsPage> {
   String? _filterStateId;
   String? _filterMetroId;
   String? _filterAreaId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seed filters from the router (dashboard → admin)
+    _filterStateId =
+        (widget.initialStateId != null && widget.initialStateId!.isNotEmpty)
+            ? widget.initialStateId
+            : null;
+    _filterMetroId =
+        (widget.initialMetroId != null && widget.initialMetroId!.isNotEmpty)
+            ? widget.initialMetroId
+            : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,26 +93,51 @@ class _AdminShopsPageState extends State<AdminShopsPage> {
             }
           }
 
+          // 🔹 Effective filters:
+          // If the current filter id doesn't exist in the labels map
+          // (i.e., no shops in that state/metro/area yet), treat it as null.
+          final String? effectiveStateFilter = (_filterStateId != null &&
+                  stateLabels.containsKey(_filterStateId))
+              ? _filterStateId
+              : null;
+
+          final String? effectiveMetroFilter = (_filterMetroId != null &&
+                  metroLabels.containsKey(_filterMetroId))
+              ? _filterMetroId
+              : null;
+
+          final String? effectiveAreaFilter =
+              (_filterAreaId != null && areaLabels.containsKey(_filterAreaId))
+                  ? _filterAreaId
+                  : null;
+
+          // Options (no need to inject raw IDs that have no labels)
           final stateOptions = <String?>{null, ...stateLabels.keys};
           final metroOptions = <String?>{null, ...metroLabels.keys};
           final areaOptions = <String?>{null, ...areaLabels.keys};
 
-          // Apply filters in memory
+          // Apply filters in memory using *effective* filters
           final filteredShops = allShops.where((shop) {
             if (!_showInactive && !shop.active) return false;
             if (_featuredOnly && !shop.featured) return false;
 
-            if (_filterStateId != null &&
-                _filterStateId!.isNotEmpty &&
-                shop.stateId != _filterStateId) return false;
+            if (effectiveStateFilter != null &&
+                effectiveStateFilter.isNotEmpty &&
+                shop.stateId != effectiveStateFilter) {
+              return false;
+            }
 
-            if (_filterMetroId != null &&
-                _filterMetroId!.isNotEmpty &&
-                shop.metroId != _filterMetroId) return false;
+            if (effectiveMetroFilter != null &&
+                effectiveMetroFilter.isNotEmpty &&
+                shop.metroId != effectiveMetroFilter) {
+              return false;
+            }
 
-            if (_filterAreaId != null &&
-                _filterAreaId!.isNotEmpty &&
-                shop.areaId != _filterAreaId) return false;
+            if (effectiveAreaFilter != null &&
+                effectiveAreaFilter.isNotEmpty &&
+                shop.areaId != effectiveAreaFilter) {
+              return false;
+            }
 
             return true;
           }).toList();
@@ -132,7 +178,7 @@ class _AdminShopsPageState extends State<AdminShopsPage> {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: _filterStateId,
+                            value: effectiveStateFilter,
                             isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'State filter',
@@ -163,7 +209,7 @@ class _AdminShopsPageState extends State<AdminShopsPage> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: _filterMetroId,
+                            value: effectiveMetroFilter,
                             isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Metro filter',
@@ -197,7 +243,7 @@ class _AdminShopsPageState extends State<AdminShopsPage> {
 
                     // Area
                     DropdownButtonFormField<String>(
-                      value: _filterAreaId,
+                      value: effectiveAreaFilter,
                       isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Area filter',

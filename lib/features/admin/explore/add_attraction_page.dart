@@ -300,7 +300,10 @@ class _AddAttractionPageState extends State<AddAttractionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Attraction')),
+      appBar: AppBar(
+        title: const Text('Add Attraction'),
+        automaticallyImplyLeading: false,
+      ),
       body: Form(
         key: _form,
         child: ListView(

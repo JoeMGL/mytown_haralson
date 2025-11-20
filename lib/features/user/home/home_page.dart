@@ -7,6 +7,7 @@ import '/core/location/location_provider.dart'; // adjust path if needed
 import '../../../widgets/featured_places_section.dart'; // 👈 keeps your featured section
 import '../../../widgets/featured_eat_and_drink_section.dart';
 import '../../../widgets/featured_clubs_section.dart';
+import '../../../widgets/featured_events_section.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -191,7 +192,19 @@ class HomePage extends ConsumerWidget {
                   const SizedBox(height: 24),
 
                   // ⭐ Featured Attractions (only if we know location)
+
                   if (stateId != null && metroId != null) ...[
+                    FeaturedEventsSection(
+                      title: 'Events',
+                      stateId: stateId,
+                      metroId: metroId,
+                      onEventTap: (event) {
+                        context.pushNamed(
+                          'eventDetail', // whatever your route is called
+                          extra: event,
+                        );
+                      },
+                    ),
                     FeaturedAttractionsSection(
                       title: 'Featured Attractions',
                       stateId: stateId,

@@ -3,11 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../models/place.dart';
-import '../../../widgets/location_selector.dart';
 import 'edit_attraction_page.dart';
 
 class AdminExplorePage extends StatefulWidget {
-  const AdminExplorePage({super.key});
+  const AdminExplorePage({
+    super.key,
+    this.initialStateId,
+    this.initialMetroId,
+  });
+
+  final String? initialStateId;
+  final String? initialMetroId;
 
   @override
   State<AdminExplorePage> createState() => _AdminExplorePageState();
@@ -20,6 +26,20 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
   String? _filterStateId;
   String? _filterMetroId;
   String? _filterAreaId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seed filters from router params (dashboard → admin)
+    _filterStateId =
+        (widget.initialStateId != null && widget.initialStateId!.isNotEmpty)
+            ? widget.initialStateId
+            : null;
+    _filterMetroId =
+        (widget.initialMetroId != null && widget.initialMetroId!.isNotEmpty)
+            ? widget.initialMetroId
+            : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,9 +93,22 @@ class _AdminExplorePageState extends State<AdminExplorePage> {
             }
           }
 
-          final stateOptions = <String?>{null, ...stateLabels.keys};
-          final metroOptions = <String?>{null, ...metroLabels.keys};
-          final areaOptions = <String?>{null, ...areaLabels.keys};
+          // Include current filter IDs in options even if there are no places yet
+          final stateOptions = <String?>{
+            null,
+            if (_filterStateId != null) _filterStateId,
+            ...stateLabels.keys
+          };
+          final metroOptions = <String?>{
+            null,
+            if (_filterMetroId != null) _filterMetroId,
+            ...metroLabels.keys
+          };
+          final areaOptions = <String?>{
+            null,
+            if (_filterAreaId != null) _filterAreaId,
+            ...areaLabels.keys
+          };
 
           // Apply filters
           final filteredPlaces = allPlaces.where((p) {

@@ -5,7 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../models/eat_and_drink.dart';
 
 class AdminEatAndDrinkPage extends StatefulWidget {
-  const AdminEatAndDrinkPage({super.key});
+  const AdminEatAndDrinkPage({
+    super.key,
+    this.initialStateId,
+    this.initialMetroId,
+  });
+
+  final String? initialStateId;
+  final String? initialMetroId;
 
   @override
   State<AdminEatAndDrinkPage> createState() => _AdminEatAndDrinkPageState();
@@ -18,6 +25,20 @@ class _AdminEatAndDrinkPageState extends State<AdminEatAndDrinkPage> {
   String? _filterStateId;
   String? _filterMetroId;
   String? _filterAreaId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seed filters from the router (dashboard → admin)
+    _filterStateId =
+        (widget.initialStateId != null && widget.initialStateId!.isNotEmpty)
+            ? widget.initialStateId
+            : null;
+    _filterMetroId =
+        (widget.initialMetroId != null && widget.initialMetroId!.isNotEmpty)
+            ? widget.initialMetroId
+            : null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,9 +92,22 @@ class _AdminEatAndDrinkPageState extends State<AdminEatAndDrinkPage> {
             }
           }
 
-          final stateOptions = <String?>{null, ...stateLabels.keys};
-          final metroOptions = <String?>{null, ...metroLabels.keys};
-          final areaOptions = <String?>{null, ...areaLabels.keys};
+          // Include any current filters in options so dropdowns stay valid
+          final stateOptions = <String?>{
+            null,
+            if (_filterStateId != null) _filterStateId,
+            ...stateLabels.keys,
+          };
+          final metroOptions = <String?>{
+            null,
+            if (_filterMetroId != null) _filterMetroId,
+            ...metroLabels.keys,
+          };
+          final areaOptions = <String?>{
+            null,
+            if (_filterAreaId != null) _filterAreaId,
+            ...areaLabels.keys,
+          };
 
           // Apply filters
           final filtered = allPlaces.where((p) {
@@ -82,15 +116,21 @@ class _AdminEatAndDrinkPageState extends State<AdminEatAndDrinkPage> {
 
             if (_filterStateId != null &&
                 _filterStateId!.isNotEmpty &&
-                p.stateId != _filterStateId) return false;
+                p.stateId != _filterStateId) {
+              return false;
+            }
 
             if (_filterMetroId != null &&
                 _filterMetroId!.isNotEmpty &&
-                p.metroId != _filterMetroId) return false;
+                p.metroId != _filterMetroId) {
+              return false;
+            }
 
             if (_filterAreaId != null &&
                 _filterAreaId!.isNotEmpty &&
-                p.areaId != _filterAreaId) return false;
+                p.areaId != _filterAreaId) {
+              return false;
+            }
 
             return true;
           }).toList();
