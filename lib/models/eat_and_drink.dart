@@ -6,21 +6,28 @@ class EatAndDrink {
 
   // Core
   final String name;
+
+  // 📍 Address
+  final String street;
   final String city;
+  final String state;
+  final String zip;
+
+  // Category / media
   final String category; // slug
   final String description;
   final String imageUrl;
   final String heroTag;
 
   // Details
-  final String? hours; // legacy
+  final String? hours; // legacy string
   final List<String> tags;
   final GeoPoint? coords;
   final String? phone;
   final String? website;
   final String? mapQuery;
 
-  // 🔹 NEW: structured hours by day
+  // 🔹 Structured hours by day
   final Map<String, DayHours>? hoursByDay;
 
   // Flags
@@ -43,7 +50,10 @@ class EatAndDrink {
   EatAndDrink({
     required this.id,
     required this.name,
+    required this.street,
     required this.city,
+    required this.state,
+    required this.zip,
     required this.category,
     required this.description,
     required this.imageUrl,
@@ -54,7 +64,7 @@ class EatAndDrink {
     this.phone,
     this.website,
     this.mapQuery,
-    this.hoursByDay, // 👈 NEW
+    this.hoursByDay,
     required this.featured,
     required this.active,
     required this.search,
@@ -95,7 +105,13 @@ class EatAndDrink {
     return EatAndDrink(
       id: doc.id,
       name: (data['name'] ?? '').toString(),
+
+      // 📍 Address (defaults for old docs)
+      street: (data['street'] ?? '').toString(),
       city: (data['city'] ?? '').toString(),
+      state: (data['state'] ?? '').toString(),
+      zip: (data['zip'] ?? '').toString(),
+
       category: (data['category'] ?? '').toString(),
       description: (data['description'] ?? '').toString(),
       imageUrl: (data['imageUrl'] ?? '').toString(),
@@ -106,7 +122,7 @@ class EatAndDrink {
       phone: data['phone']?.toString(),
       website: data['website']?.toString(),
       mapQuery: data['mapQuery']?.toString(),
-      hoursByDay: _readHoursByDay(), // 👈 NEW
+      hoursByDay: _readHoursByDay(),
       featured: (data['featured'] ?? false) as bool,
       active: (data['active'] ?? true) as bool,
       search: _readStringList('search'),
@@ -124,7 +140,13 @@ class EatAndDrink {
   Map<String, dynamic> toMap() {
     return {
       'name': name,
+
+      // 📍 Address
+      'street': street,
       'city': city,
+      'state': state,
+      'zip': zip,
+
       'category': category,
       'description': description,
       'imageUrl': imageUrl,
@@ -154,7 +176,10 @@ class EatAndDrink {
 
   EatAndDrink copyWith({
     String? name,
+    String? street,
     String? city,
+    String? state,
+    String? zip,
     String? category,
     String? description,
     String? imageUrl,
@@ -181,7 +206,10 @@ class EatAndDrink {
     return EatAndDrink(
       id: id,
       name: name ?? this.name,
+      street: street ?? this.street,
       city: city ?? this.city,
+      state: state ?? this.state,
+      zip: zip ?? this.zip,
       category: category ?? this.category,
       description: description ?? this.description,
       imageUrl: imageUrl ?? this.imageUrl,

@@ -25,8 +25,13 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
   late TextEditingController _nameController;
   late TextEditingController _imageUrlController;
 
-  // Core fields
+  // Address fields
+  String _street = '';
   String _city = '';
+  String _state = '';
+  String _zip = '';
+
+  // Core fields
   String _category = ''; // category slug from Firestore
   String _description = '';
   String _phone = '';
@@ -196,16 +201,40 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
                 ),
               const SizedBox(height: 12),
 
-              // City
+              // 📍 Full address
+              TextFormField(
+                initialValue: _street,
+                decoration: const InputDecoration(labelText: 'Street address'),
+                onSaved: (v) => _street = v?.trim() ?? '',
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
+
               TextFormField(
                 initialValue: _city,
                 decoration: const InputDecoration(labelText: 'City'),
                 onSaved: (v) => _city = v?.trim() ?? '',
                 textCapitalization: TextCapitalization.words,
               ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                initialValue: _state,
+                decoration: const InputDecoration(labelText: 'State'),
+                onSaved: (v) => _state = v?.trim() ?? '',
+                textCapitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                initialValue: _zip,
+                decoration: const InputDecoration(labelText: 'ZIP code'),
+                keyboardType: TextInputType.streetAddress,
+                onSaved: (v) => _zip = v?.trim() ?? '',
+              ),
               const SizedBox(height: 16),
 
-              // Location selector
+              // Location selector (state/metro/area hierarchy)
               LocationSelector(
                 initialStateId: _stateId,
                 initialMetroId: _metroId,
@@ -218,6 +247,12 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
                     _metroName = loc.metroName;
                     _areaId = loc.areaId;
                     _areaName = loc.areaName;
+
+                    // Keep text state in sync with selector if user hasn't typed it
+                    if ((_state.isEmpty || _state == _stateName) &&
+                        loc.stateName != null) {
+                      _state = loc.stateName!;
+                    }
                   });
                 },
               ),
@@ -269,7 +304,7 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
               ),
               const SizedBox(height: 12),
 
-              // 🔹 NEW: Weekly hours picker
+              // 🔹 Weekly hours picker
               WeeklyHoursField(
                 initialValue: _hoursByDay,
                 onChanged: (value) {
@@ -360,13 +395,15 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
       final place = EatAndDrink(
         id: '',
         name: name,
+        street: _street.trim(),
         city: _city.trim(),
+        state: _state.trim(),
+        zip: _zip.trim(),
         category: _category,
         description: _description.trim(),
         imageUrl: imageUrl,
         heroTag: '',
-        // 🔹 Legacy hours string – now unused, keep null for compatibility
-        hours: null,
+        hours: null, // legacy
         tags: const [],
         coords: null,
         phone: _phone.trim().isEmpty ? null : _phone.trim(),
@@ -376,8 +413,11 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
         active: true,
         search: [
           name.toLowerCase(),
+          _street.toLowerCase(),
           _city.toLowerCase(),
+          _zip.toLowerCase(),
           _category.toLowerCase(),
+          if (_state.isNotEmpty) _state.toLowerCase(),
           if (_stateName != null) _stateName!.toLowerCase(),
           if (_metroName != null) _metroName!.toLowerCase(),
           if (_areaName != null && _areaName!.isNotEmpty)
@@ -389,17 +429,16 @@ class _AddEatAndDrinkPageState extends State<AddEatAndDrinkPage> {
         metroName: _metroName ?? '',
         areaId: _areaId ?? '',
         areaName: _areaName ?? '',
-
-        // ✅ NEW required fields
         galleryImageUrls: _imageUrls,
         bannerImageUrl: _bannerImageUrl,
+        // hoursByDay is stored separately in Firestore below
+        hoursByDay: null,
       );
 
       await FirebaseFirestore.instance.collection('eatAndDrink').add({
         ...place.toMap(),
         'galleryImageUrls': _imageUrls,
         'bannerImageUrl': _bannerImageUrl.isEmpty ? null : _bannerImageUrl,
-        // 🔹 Save structured hours to Firestore
         'hoursByDay': _hoursByDay.map(
           (key, value) => MapEntry(key, value.toMap()),
         ),

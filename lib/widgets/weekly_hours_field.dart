@@ -1,11 +1,21 @@
 // lib/widgets/weekly_hours_field.dart
 import 'package:flutter/material.dart';
+import 'package:visit_haralson/models/place.dart'; // for DayHours
 
-import '../models/place.dart'; // for DayHours
-
+/// A map of weekday key -> DayHours, e.g. "mon", "tue", ...
 typedef HoursByDay = Map<String, DayHours>;
 
-const _dayLabels = <String, String>{
+const _kDayOrder = <String>[
+  'mon',
+  'tue',
+  'wed',
+  'thu',
+  'fri',
+  'sat',
+  'sun',
+];
+
+const _kDayLabels = <String, String>{
   'mon': 'Monday',
   'tue': 'Tuesday',
   'wed': 'Wednesday',
@@ -37,160 +47,213 @@ class _WeeklyHoursFieldState extends State<WeeklyHoursField> {
   @override
   void initState() {
     super.initState();
-
-    // Start with all days present
-    _value = {
-      for (final entry in _dayLabels.entries)
-        entry.key:
-            widget.initialValue[entry.key] ?? const DayHours(closed: true),
-    };
+    _value = _normalize(widget.initialValue);
   }
 
-  String _summaryText() {
-    final openDays = _value.entries.where((e) => !e.value.closed).length;
-    if (openDays == 0) return 'Closed all week';
-    if (openDays == 7) return 'Open every day';
-    return 'Open $openDays day(s) per week';
+  @override
+  void didUpdateWidget(covariant WeeklyHoursField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialValue != widget.initialValue) {
+      _value = _normalize(widget.initialValue);
+    }
   }
 
-  Future<void> _showHoursDialog() async {
-    // Local working copy
-    final temp = Map<String, DayHours>.from(_value);
+  HoursByDay _normalize(HoursByDay input) {
+    final map = <String, DayHours>{};
+    for (final key in _kDayOrder) {
+      map[key] = input[key] ?? const DayHours(closed: true);
+    }
+    return map;
+  }
 
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setStateDialog) {
-            return AlertDialog(
-              title: Text(widget.label),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: _dayLabels.entries.map((entry) {
-                      final key = entry.key;
-                      final label = entry.value;
-                      final day = temp[key] ?? const DayHours(closed: true);
+  void _setDay(
+    String key, {
+    bool? closed,
+    String? open,
+    String? close,
+  }) {
+    final current = _value[key] ?? const DayHours(closed: true);
 
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                              title: Text(label),
-                              value: !day.closed,
-                              onChanged: (isOpen) {
-                                setStateDialog(() {
-                                  temp[key] = DayHours(
-                                    closed: !isOpen,
-                                    open: isOpen ? day.open : null,
-                                    close: isOpen ? day.close : null,
-                                  );
-                                });
-                              },
-                            ),
-                            if (!day.closed)
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextFormField(
-                                      initialValue: day.open ?? '',
-                                      decoration: const InputDecoration(
-                                        labelText: 'Open',
-                                        hintText: '9:00 AM',
-                                      ),
-                                      onChanged: (v) {
-                                        setStateDialog(() {
-                                          temp[key] = DayHours(
-                                            closed: false,
-                                            open: v.trim().isEmpty
-                                                ? null
-                                                : v.trim(),
-                                            close: temp[key]?.close,
-                                          );
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: TextFormField(
-                                      initialValue: day.close ?? '',
-                                      decoration: const InputDecoration(
-                                        labelText: 'Close',
-                                        hintText: '5:00 PM',
-                                      ),
-                                      onChanged: (v) {
-                                        setStateDialog(() {
-                                          temp[key] = DayHours(
-                                            closed: false,
-                                            open: temp[key]?.open,
-                                            close: v.trim().isEmpty
-                                                ? null
-                                                : v.trim(),
-                                          );
-                                        });
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    // Normalize all days
-                    final normalized = <String, DayHours>{
-                      for (final entry in _dayLabels.entries)
-                        entry.key:
-                            temp[entry.key] ?? const DayHours(closed: true),
-                    };
-
-                    setState(() {
-                      _value = normalized;
-                    });
-                    widget.onChanged(_value);
-                    Navigator.of(ctx).pop();
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    final next = DayHours(
+      closed: closed ?? current.closed,
+      open: open ?? current.open,
+      close: close ?? current.close,
     );
+
+    setState(() {
+      _value = {
+        ..._value,
+        key: next,
+      };
+    });
+
+    widget.onChanged(_value);
+  }
+
+  String _labelForDay(DayHours dh) {
+    if (dh.closed) return 'Closed';
+    if (dh.open == null && dh.close == null) return 'Hours not set';
+    if (dh.open == null) return 'Closes ${dh.close}';
+    if (dh.close == null) return 'Opens ${dh.open}';
+    return '${dh.open} – ${dh.close}';
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(widget.label),
-      subtitle: Text(
-        _summaryText(),
-        style: TextStyle(color: cs.onSurface.withOpacity(0.7)),
-      ),
-      trailing: OutlinedButton(
-        onPressed: _showHoursDialog,
-        child: const Text('Edit'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.label,
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 4),
+        Card(
+          margin: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (final key in _kDayOrder)
+                _DayRow(
+                  dayKey: key,
+                  label: _kDayLabels[key] ?? key,
+                  hours: _value[key] ?? const DayHours(closed: true),
+                  colorScheme: cs,
+                  onChanged: (updated) {
+                    _setDay(
+                      key,
+                      closed: updated.closed,
+                      open: updated.open,
+                      close: updated.close,
+                    );
+                  },
+                  displayLabel: _labelForDay(
+                    _value[key] ?? const DayHours(closed: true),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DayRow extends StatelessWidget {
+  final String dayKey;
+  final String label;
+  final DayHours hours;
+  final ColorScheme colorScheme;
+  final void Function(DayHours) onChanged;
+  final String displayLabel;
+
+  const _DayRow({
+    required this.dayKey,
+    required this.label,
+    required this.hours,
+    required this.colorScheme,
+    required this.onChanged,
+    required this.displayLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // REVERSED MEANING:
+    // toggle ON  = OPEN
+    // toggle OFF = CLOSED
+    final isOpen = !hours.closed;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(label),
+                  subtitle: Text(displayLabel),
+                ),
+              ),
+
+              //
+              // 🔄 reversed toggle meaning
+              //
+              Switch(
+                value: isOpen,
+                onChanged: (v) {
+                  if (v == true) {
+                    // switched ON → now OPEN
+                    onChanged(
+                      DayHours(
+                        closed: false,
+                        open: hours.open,
+                        close: hours.close,
+                      ),
+                    );
+                  } else {
+                    // switched OFF → now CLOSED
+                    onChanged(const DayHours(closed: true));
+                  }
+                },
+              ),
+
+              const SizedBox(width: 8),
+            ],
+          ),
+
+          // Only show Open/Close fields when OPEN
+          if (isOpen)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8, left: 8, right: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      initialValue: hours.open,
+                      decoration: const InputDecoration(
+                        labelText: 'Open',
+                        hintText: 'e.g. 9:00 AM',
+                      ),
+                      onChanged: (v) {
+                        onChanged(
+                          DayHours(
+                            closed: false,
+                            open: v.trim().isEmpty ? null : v.trim(),
+                            close: hours.close,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextFormField(
+                      initialValue: hours.close,
+                      decoration: const InputDecoration(
+                        labelText: 'Close',
+                        hintText: 'e.g. 5:00 PM',
+                      ),
+                      onChanged: (v) {
+                        onChanged(
+                          DayHours(
+                            closed: false,
+                            open: hours.open,
+                            close: v.trim().isEmpty ? null : v.trim(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const Divider(height: 1),
+        ],
       ),
     );
   }

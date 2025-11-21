@@ -25,7 +25,19 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
   final _form = GlobalKey<FormState>();
 
   late String _name;
+
+  // 📍 Address backing values (for search, etc.)
+  late String _street;
   late String _city;
+  late String _state;
+  late String _zip;
+
+  // 📍 Address controllers (for text fields)
+  late TextEditingController _streetController;
+  late TextEditingController _cityController;
+  late TextEditingController _stateTextController;
+  late TextEditingController _zipController;
+
   late String _category; // slug or legacy name (we normalize on load)
   late String _description;
   late String _phone;
@@ -54,7 +66,7 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
   List<String> _imageUrls = [];
   String _bannerImageUrl = '';
 
-  // 🔹 NEW: structured hours
+  // 🔹 structured hours
   HoursByDay _hoursByDay = {}; // Map<String, DayHours>
 
   @override
@@ -63,8 +75,19 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
     final p = widget.place;
 
     _name = p.name;
+
+    // 📍 address from model
+    _street = p.street;
     _city = p.city;
-    _category = p.category; // might be name or slug, we’ll fix after load
+    _state = p.state;
+    _zip = p.zip;
+
+    _streetController = TextEditingController(text: _street);
+    _cityController = TextEditingController(text: _city);
+    _stateTextController = TextEditingController(text: _state);
+    _zipController = TextEditingController(text: _zip);
+
+    _category = p.category; // might be name or slug, we’ll normalize
     _description = p.description;
     _phone = p.phone ?? '';
     _website = p.website ?? '';
@@ -95,6 +118,10 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
   @override
   void dispose() {
     _imageUrlController.dispose();
+    _streetController.dispose();
+    _cityController.dispose();
+    _stateTextController.dispose();
+    _zipController.dispose();
     super.dispose();
   }
 
@@ -236,12 +263,32 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                 ),
               const SizedBox(height: 12),
 
-              // City
+              // 📍 Full address
               TextFormField(
-                initialValue: _city,
-                decoration: const InputDecoration(labelText: 'City'),
-                onSaved: (v) => _city = v?.trim() ?? '',
+                controller: _streetController,
+                decoration: const InputDecoration(labelText: 'Street address'),
                 textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _cityController,
+                decoration: const InputDecoration(labelText: 'City'),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _stateTextController,
+                decoration: const InputDecoration(labelText: 'State'),
+                textCapitalization: TextCapitalization.characters,
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _zipController,
+                decoration: const InputDecoration(labelText: 'ZIP code'),
+                keyboardType: TextInputType.streetAddress,
               ),
               const SizedBox(height: 16),
 
@@ -258,6 +305,13 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
                     _metroName = loc.metroName;
                     _areaId = loc.areaId;
                     _areaName = loc.areaName;
+
+                    // keep state text in sync if user hasn't changed it
+                    if ((_stateTextController.text.isEmpty ||
+                            _stateTextController.text == _stateName) &&
+                        loc.stateName != null) {
+                      _stateTextController.text = loc.stateName!;
+                    }
                   });
                 },
               ),
@@ -310,7 +364,7 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
               ),
               const SizedBox(height: 12),
 
-              // 🔹 NEW: Weekly hours picker
+              // 🔹 Weekly hours picker
               WeeklyHoursField(
                 initialValue: _hoursByDay,
                 onChanged: (value) {
@@ -404,44 +458,74 @@ class _EditEatAndDrinkPageState extends State<EditEatAndDrinkPage> {
     try {
       final imageUrl = _imageUrlController.text.trim();
 
-      await FirebaseFirestore.instance
-          .collection('eatAndDrink')
-          .doc(widget.place.id)
-          .update({
+      // sync backing strings from controllers
+      _street = _streetController.text.trim();
+      _city = _cityController.text.trim();
+      _state = _stateTextController.text.trim();
+      _zip = _zipController.text.trim();
+
+      final updateData = <String, dynamic>{
         'name': _name.trim(),
-        'city': _city.trim(),
+
+        // 📍 Address
+        'street': _street,
+        'city': _city,
+        'state': _state,
+        'zip': _zip,
+
+        // Category & details
         'category': _category, // normalized to slug
         'description': _description.trim(),
-        // ❗ We no longer touch the legacy 'hours' string here; it stays as-is.
+        // keep legacy 'hours' as-is
         'phone': _phone.trim().isEmpty ? null : _phone.trim(),
         'website': _website.trim().isEmpty ? null : _website.trim(),
         'mapQuery': _mapQuery.trim().isEmpty ? null : _mapQuery.trim(),
+
+        // Flags
         'featured': _featured,
         'active': _active,
+
+        // Location hierarchy
         'stateId': _stateId,
         'stateName': _stateName ?? '',
         'metroId': _metroId,
         'metroName': _metroName ?? '',
         'areaId': _areaId,
         'areaName': _areaName ?? '',
+
+        // Images
         'imageUrl': imageUrl,
         'galleryImageUrls': _imageUrls,
         'bannerImageUrl': _bannerImageUrl.isEmpty ? null : _bannerImageUrl,
-        // 🔹 Save structured hours
+
+        // Structured hours
         'hoursByDay': _hoursByDay.map(
           (key, value) => MapEntry(key, value.toMap()),
         ),
+
+        // Search tokens
         'search': [
           _name.toLowerCase(),
+          _street.toLowerCase(),
           _city.toLowerCase(),
+          _zip.toLowerCase(),
           _category.toLowerCase(),
+          if (_state.isNotEmpty) _state.toLowerCase(),
           if (_stateName != null) _stateName!.toLowerCase(),
           if (_metroName != null) _metroName!.toLowerCase(),
           if (_areaName != null && _areaName!.isNotEmpty)
             _areaName!.toLowerCase(),
         ],
+
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      debugPrint('EditEatAndDrink MERGE for ${widget.place.id}: $updateData');
+
+      await FirebaseFirestore.instance
+          .collection('eatAndDrink')
+          .doc(widget.place.id)
+          .set(updateData, SetOptions(merge: true));
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
