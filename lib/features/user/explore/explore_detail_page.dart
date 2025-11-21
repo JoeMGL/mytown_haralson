@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/place.dart';
+import '../../../widgets/favorite_button.dart'; // ⬅️ NEW
 
 class ExploreDetailPage extends StatelessWidget {
   const ExploreDetailPage({
@@ -28,7 +29,16 @@ class ExploreDetailPage extends StatelessWidget {
     ].join(' • ');
 
     return Scaffold(
-      appBar: AppBar(title: Text(place.title)),
+      appBar: AppBar(
+        title: Text(place.title),
+        actions: [
+          // ⭐ Favorite button in the app bar
+          FavoriteButton(
+            type: 'attraction', // or 'explore' if you prefer
+            itemId: place.id,
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

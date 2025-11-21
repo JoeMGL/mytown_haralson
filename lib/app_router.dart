@@ -36,6 +36,7 @@ import 'features/user/stay/stay_page.dart';
 import 'features/user/shop/shop_page.dart';
 import 'features/user/shop/shop_detail_page.dart';
 import 'features/claims/claim_business_page.dart';
+import 'features/user/favorites/favorites_page.dart';
 
 // clubs
 import 'features/user/clubs/clubs_page.dart';
@@ -152,6 +153,12 @@ final GoRouter appRouter = GoRouter(
         ),
       ),
       routes: [
+        GoRoute(
+          path: '/favorites',
+          name: 'favorites',
+          builder: (context, state) => const FavoritesPage(),
+        ),
+
         // /explore
         GoRoute(
           path: 'explore',
