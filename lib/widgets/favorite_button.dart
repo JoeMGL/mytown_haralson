@@ -1,128 +1,91 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../core/favorites/favorites_repository.dart';
-import '../models/favorite.dart';
+import '../features/auth/require_full_account.dart';
 
-class FavoriteButton extends ConsumerWidget {
+class FavoriteButton extends StatelessWidget {
   const FavoriteButton({
     super.key,
     required this.type,
     required this.itemId,
-    this.size = 24,
-    this.iconColor,
   });
 
-  /// e.g. 'eat_and_drink', 'event', 'attraction', 'club'
+  /// e.g. 'attraction', 'eat', 'event', 'shop', 'stay'
   final String type;
 
-  /// The Firestore ID of the underlying item
+  /// Firestore doc id for the item (place.id, event.id, etc.)
   final String itemId;
 
-  /// Icon size
-  final double size;
-
-  /// Optional override color
-  final Color? iconColor;
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final favoritesAsync = ref.watch(userFavoritesProvider);
-    final repo = ref.watch(favoritesRepositoryProvider);
-
+  Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid;
 
-    final cs = Theme.of(context).colorScheme;
-    final effectiveColor = iconColor ?? cs.primary;
+    // If we don't have a user yet, just show "not favorite" icon.
+    // When tapped, requireFullAccount will handle auth and toggle.
+    if (uid == null) {
+      return IconButton(
+        icon: const Icon(Icons.favorite_border),
+        onPressed: () async {
+          await _handleToggle(context);
+        },
+      );
+    }
 
-    final isLoggedIn = user != null;
+    final docRef = FirebaseFirestore.instance
+        .collection('userFavorites')
+        .doc(uid)
+        .collection('items')
+        .doc(_favoriteDocId);
 
-    return favoritesAsync.when(
-      data: (favoritesMap) {
-        final key = favoriteKey(type, itemId);
-        final isFav = favoritesMap.containsKey(key);
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: docRef.snapshots(),
+      builder: (context, snapshot) {
+        final exists = snapshot.data?.exists == true;
+        final isFavorite = exists;
 
         return IconButton(
-          iconSize: size,
-          tooltip: isFav ? 'Remove from favorites' : 'Save to favorites',
-          onPressed: () async {
-            if (!isLoggedIn) {
-              // Not logged in → show a dialog or route to login.
-              await _showLoginPrompt(context);
-              return;
-            }
-
-            try {
-              // Optimistic UI is handled by the stream
-              await repo.toggleFavorite(type, itemId);
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Could not update favorites: $e')),
-              );
-            }
-          },
           icon: Icon(
-            isFav ? Icons.favorite : Icons.favorite_border,
-            color: isFav ? effectiveColor : cs.onSurfaceVariant,
+            isFavorite ? Icons.favorite : Icons.favorite_border,
           ),
+          onPressed: () async {
+            await _handleToggle(context);
+          },
         );
       },
-      loading: () => IconButton(
-        onPressed: null,
-        icon: SizedBox(
-          width: size,
-          height: size,
-          child: const CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
-      error: (err, stack) => IconButton(
-        onPressed: () async {
-          if (!isLoggedIn) {
-            await _showLoginPrompt(context);
-            return;
-          }
-          try {
-            await repo.toggleFavorite(type, itemId);
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Could not update favorites: $e')),
-            );
-          }
-        },
-        icon: Icon(
-          Icons.favorite_border,
-          size: size,
-          color: cs.error,
-        ),
-      ),
     );
   }
 
-  Future<void> _showLoginPrompt(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Sign in to save favorites'),
-          content: const Text(
-            'Create a free account or sign in to save your favorite places and events.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Not now'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // TODO: Update with your real login route
-                // context.push('/login');
-              },
-              child: const Text('Sign in'),
-            ),
-          ],
-        );
+  /// Combines type + itemId into one doc id, so a user can favorite
+  /// the same item across sections without collisions.
+  String get _favoriteDocId => '${type}_$itemId';
+
+  Future<void> _handleToggle(BuildContext context) async {
+    await requireFullAccount(
+      context,
+      action: (User user) async {
+        final uid = user.uid;
+
+        final docRef = FirebaseFirestore.instance
+            .collection('userFavorites')
+            .doc(uid)
+            .collection('items')
+            .doc(_favoriteDocId);
+
+        final snap = await docRef.get();
+
+        if (snap.exists) {
+          // Already favorite → remove
+          await docRef.delete();
+        } else {
+          // Not favorite → add
+          await docRef.set({
+            'type': type,
+            'itemId': itemId,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
       },
     );
   }

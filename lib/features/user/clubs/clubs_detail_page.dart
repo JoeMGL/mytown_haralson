@@ -66,7 +66,6 @@ class ClubDetailPage extends StatelessWidget {
               FavoriteButton(
                 type: 'club',
                 itemId: club.id,
-                size: 26,
               ),
               const SizedBox(width: 12),
             ],

@@ -70,6 +70,9 @@ import 'features/admin/config/global.dart';
 // 🔐 Auth UI
 import 'features/auth/login_page.dart';
 
+// 🧭 Onboarding
+import 'features/onboarding/onboarding_flow_page.dart';
+
 /// Helper to make GoRouter rebuild when auth state changes.
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {
@@ -97,22 +100,39 @@ final GoRouter appRouter = GoRouter(
     final user = FirebaseAuth.instance.currentUser;
     final loggingIn = state.matchedLocation == '/login';
     final isAdminRoute = state.matchedLocation.startsWith('/admin');
+    final isOnboardingRoute = state.matchedLocation == '/onboarding';
 
-    // Public routes (non-admin) are always allowed
+    // -------- PUBLIC APP / NON-ADMIN --------
     if (!isAdminRoute) {
-      // If user is logged in and on /login, bounce them to either
-      // the "from" param or admin dashboard or home
-      if (loggingIn && user != null) {
-        final from = state.uri.queryParameters['from'];
-        if (from != null && from.isNotEmpty) {
-          return from;
+      // /login is always allowed for public side (for now)
+      if (loggingIn) {
+        if (user != null) {
+          // Already logged in → bounce away from /login
+          final from = state.uri.queryParameters['from'];
+          if (from != null && from.isNotEmpty) {
+            return from;
+          }
+          return '/admin';
         }
-        return '/admin';
+        return null; // allow access to login page
       }
+
+      // Avoid redirect loops on /onboarding
+      if (isOnboardingRoute) {
+        return null;
+      }
+
+      // If there is no Firebase user at all, send them to onboarding.
+      // OnboardingFlowPage will handle anonymous sign-in + profile creation.
+      if (user == null) {
+        return '/onboarding';
+      }
+
+      // Otherwise, allow normal public routes.
       return null;
     }
 
-    // From here down, we're in /admin...
+    // -------- ADMIN ROUTES (require login via /login) --------
 
     // Not logged in → must go to /login
     if (user == null) {
@@ -120,8 +140,7 @@ final GoRouter appRouter = GoRouter(
       return '/login?from=$from';
     }
 
-    // Logged in and trying to access /login (with from=/admin/...) – already handled above,
-    // but keep this as a safety net.
+    // Logged in and trying to access /login from /admin...
     if (loggingIn) {
       final from = state.uri.queryParameters['from'];
       if (from != null && from.isNotEmpty) {
@@ -140,6 +159,14 @@ final GoRouter appRouter = GoRouter(
       path: '/login',
       pageBuilder: (context, state) => const NoTransitionPage(
         child: LoginPage(),
+      ),
+    ),
+
+    // -------- ONBOARDING (public, but gated via redirect above) --------
+    GoRoute(
+      path: '/onboarding',
+      pageBuilder: (context, state) => const NoTransitionPage(
+        child: OnboardingFlowPage(),
       ),
     ),
 

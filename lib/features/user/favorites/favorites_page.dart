@@ -401,7 +401,6 @@ class FavoritesPage extends ConsumerWidget {
                                 trailing: FavoriteButton(
                                   type: fav.type,
                                   itemId: fav.itemId,
-                                  size: 22,
                                 ),
                                 onTap: () {
                                   _handleTap(context, rf);

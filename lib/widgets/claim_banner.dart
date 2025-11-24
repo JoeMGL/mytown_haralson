@@ -1,6 +1,9 @@
 // lib/widgets/claim_banner.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../features/auth/require_full_account.dart';
 
 class ClaimBanner extends StatelessWidget {
   const ClaimBanner({
@@ -8,10 +11,6 @@ class ClaimBanner extends StatelessWidget {
     required this.docPath,
   });
 
-  /// Full Firestore doc path, e.g.:
-  /// - eatAndDrink/{id}
-  /// - places/{id}
-  /// - lodging/{id}
   final String docPath;
 
   @override
@@ -30,16 +29,33 @@ class ClaimBanner extends StatelessWidget {
             'Claim this page to update information, add photos, and post announcements.',
           ),
           trailing: TextButton(
-            onPressed: () {
-              context.push(
-                '/claim',
-                extra: docPath, // ✅ pass path to claim page
-              );
+            onPressed: () async {
+              await _handleClaim(context);
             },
             child: const Text('Claim'),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _handleClaim(BuildContext context) async {
+    final auth = FirebaseAuth.instance;
+    final user = auth.currentUser;
+
+    // No user or anonymous user → require account upgrade
+    if (user == null || user.isAnonymous) {
+      await requireFullAccount(
+        context,
+        action: (fullUser) async {
+          // After user signs in or upgrades from anonymous:
+          context.push('/claim', extra: docPath);
+        },
+      );
+      return;
+    }
+
+    // Already full account → proceed directly
+    context.push('/claim', extra: docPath);
   }
 }

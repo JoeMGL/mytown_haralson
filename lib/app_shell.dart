@@ -164,7 +164,13 @@ class _UserMainDrawer extends StatelessWidget {
                 context.go('/admin');
               },
             ),
-            
+            staticTile(
+              'Onboarding',
+              Icons.app_registration_outlined,
+              onTap: () {
+                context.go('/onboarding');
+              },
+            )
           ],
         ),
       ),
