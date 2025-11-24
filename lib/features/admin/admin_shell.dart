@@ -158,6 +158,7 @@ class _UnauthorizedScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final uri = GoRouterState.of(context).uri.toString();
 
     return Scaffold(
       appBar: AppBar(
@@ -191,11 +192,22 @@ class _UnauthorizedScaffold extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodyMedium,
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 ElevatedButton.icon(
+                  onPressed: () async {
+                    // Sign out current user (anon or non-admin)
+                    await FirebaseAuth.instance.signOut();
+                    if (context.mounted) {
+                      context.go('/login?from=$uri');
+                    }
+                  },
+                  icon: const Icon(Icons.login),
+                  label: const Text('Sign in with staff account'),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
                   onPressed: () => context.go('/'),
-                  icon: const Icon(Icons.home),
-                  label: const Text('Back to site'),
+                  child: const Text('Back to site'),
                 ),
               ],
             ),

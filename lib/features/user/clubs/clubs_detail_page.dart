@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../../models/clubs_model.dart';
 import '../../../widgets/favorite_button.dart';
+import '/core/analytics/analytics_service.dart'; // 👈 NEW
 
 class ClubDetailPage extends StatelessWidget {
   const ClubDetailPage({super.key, required this.club});
@@ -285,6 +286,15 @@ class ClubDetailPage extends StatelessWidget {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       onTap: () {
+                        // 📊 phone tap
+                        AnalyticsService.logEvent(
+                          'club_contact_phone_tap',
+                          params: {
+                            'club_id': club.id,
+                            'club_name': club.name,
+                            'phone': club.contactPhone,
+                          },
+                        );
                         _launchIfNotEmpty('tel:${club.contactPhone}');
                       },
                     ),
@@ -296,6 +306,15 @@ class ClubDetailPage extends StatelessWidget {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       onTap: () {
+                        // 📊 email tap
+                        AnalyticsService.logEvent(
+                          'club_contact_email_tap',
+                          params: {
+                            'club_id': club.id,
+                            'club_name': club.name,
+                            'email': club.contactEmail,
+                          },
+                        );
                         _launchIfNotEmpty('mailto:${club.contactEmail}');
                       },
                     ),
@@ -309,13 +328,35 @@ class ClubDetailPage extends StatelessWidget {
                     children: [
                       if (club.website.isNotEmpty)
                         FilledButton.icon(
-                          onPressed: () => _launchIfNotEmpty(club.website),
+                          onPressed: () {
+                            // 📊 website tap
+                            AnalyticsService.logEvent(
+                              'club_website_tap',
+                              params: {
+                                'club_id': club.id,
+                                'club_name': club.name,
+                                'url': club.website,
+                              },
+                            );
+                            _launchIfNotEmpty(club.website);
+                          },
                           icon: const Icon(Icons.language),
                           label: const Text('Website'),
                         ),
                       if (club.facebook.isNotEmpty)
                         OutlinedButton.icon(
-                          onPressed: () => _launchIfNotEmpty(club.facebook),
+                          onPressed: () {
+                            // 📊 facebook tap
+                            AnalyticsService.logEvent(
+                              'club_facebook_tap',
+                              params: {
+                                'club_id': club.id,
+                                'club_name': club.name,
+                                'url': club.facebook,
+                              },
+                            );
+                            _launchIfNotEmpty(club.facebook);
+                          },
                           icon: const Icon(Icons.facebook),
                           label: const Text('Facebook'),
                         ),

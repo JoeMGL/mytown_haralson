@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'core/analytics/analytics_service.dart';
 
 // ADMIN
 import 'package:visit_haralson/features/admin/events/admin_events_page.dart';
@@ -95,26 +96,32 @@ final GoRouter appRouter = GoRouter(
   // 👇 Re-run redirect when FirebaseAuth authStateChanges fires
   refreshListenable:
       GoRouterRefreshStream(FirebaseAuth.instance.authStateChanges()),
+  observers: [
+    AnalyticsService.getObserver(),
+  ],
 
   redirect: (context, state) {
     final user = FirebaseAuth.instance.currentUser;
     final loggingIn = state.matchedLocation == '/login';
     final isAdminRoute = state.matchedLocation.startsWith('/admin');
     final isOnboardingRoute = state.matchedLocation == '/onboarding';
+    final isAnon = user?.isAnonymous ?? false;
 
     // -------- PUBLIC APP / NON-ADMIN --------
     if (!isAdminRoute) {
       // /login is always allowed for public side (for now)
       if (loggingIn) {
-        if (user != null) {
-          // Already logged in → bounce away from /login
+        // If already logged in with a *real* account (not anonymous),
+        // bounce away from /login.
+        if (user != null && !isAnon) {
           final from = state.uri.queryParameters['from'];
           if (from != null && from.isNotEmpty) {
             return from;
           }
           return '/admin';
         }
-        return null; // allow access to login page
+        // Anonymous or not logged in → allow access to login page
+        return null;
       }
 
       // Avoid redirect loops on /onboarding
@@ -132,24 +139,18 @@ final GoRouter appRouter = GoRouter(
       return null;
     }
 
-    // -------- ADMIN ROUTES (require login via /login) --------
-
-    // Not logged in → must go to /login
-    if (user == null) {
-      final from = state.uri.toString(); // remember where they were headed
-      return '/login?from=$from';
-    }
-
-    // Logged in and trying to access /login from /admin...
-    if (loggingIn) {
-      final from = state.uri.queryParameters['from'];
-      if (from != null && from.isNotEmpty) {
-        return from;
+    // -------- ADMIN ROUTES (require NON-anonymous login via /login) --------
+    if (isAdminRoute) {
+      // Not logged in OR anonymous → must go to /login
+      if (user == null || isAnon) {
+        final from = state.uri.toString(); // remember where they were headed
+        return '/login?from=$from';
       }
-      return '/admin';
+
+      // Logged in with a real account → allow admin route
+      return null;
     }
 
-    // Logged in & admin route → allow
     return null;
   },
 

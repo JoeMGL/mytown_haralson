@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/event.dart';
 import '../../../widgets/favorite_button.dart';
+import '../../../core/analytics/analytics_service.dart'; // 👈 NEW
 
 class EventDetailPage extends StatelessWidget {
   const EventDetailPage({
@@ -430,6 +431,17 @@ class EventDetailPage extends StatelessWidget {
   Future<void> _openWebsite() async {
     final url = event.website;
     if (url == null || url.isEmpty) return;
+
+    // 📊 Analytics: Event website tap
+    AnalyticsService.logEvent('event_website_tap', params: {
+      'event_id': event.id,
+      'event_title': event.title,
+      'website': url,
+      'city': event.city,
+      'state': event.state,
+      'category_slug': event.category,
+    });
+
     final uri = Uri.tryParse(url.startsWith('http') ? url : 'https://$url');
     if (uri == null) return;
     if (!await canLaunchUrl(uri)) return;
@@ -457,6 +469,17 @@ class EventDetailPage extends StatelessWidget {
     final uri = Uri.parse(
       'https://www.google.com/maps/search/?api=1&query=$encoded',
     );
+
+    // 📊 Analytics: Event map tap
+    AnalyticsService.logEvent('event_map_tap', params: {
+      'event_id': event.id,
+      'event_title': event.title,
+      'query': query,
+      'city': event.city,
+      'state': event.state,
+      'category_slug': event.category,
+    });
+
     if (!await canLaunchUrl(uri)) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }

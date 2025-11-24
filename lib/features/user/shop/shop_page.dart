@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics_service.dart'; // 👈 NEW
 import '../../../models/shop.dart';
 
 class ShopPage extends StatefulWidget {
@@ -28,6 +29,13 @@ class _ShopPageState extends State<ShopPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // 📊 Screen view
+    AnalyticsService.logView('ShopPage');
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
@@ -52,6 +60,11 @@ class _ShopPageState extends State<ShopPage> {
                   selected: selected,
                   onSelected: (_) {
                     setState(() => _categoryFilter = cat);
+
+                    // 📊 Analytics: user changed shop category filter
+                    AnalyticsService.logEvent('shop_category_filter', params: {
+                      'category': cat,
+                    });
                   },
                 );
               },
@@ -136,6 +149,15 @@ class _ShopPageState extends State<ShopPage> {
                       ),
                       child: InkWell(
                         onTap: () {
+                          // 📊 Analytics: user tapped a shop card
+                          AnalyticsService.logEvent('shop_card_tap', params: {
+                            'shop_id': shop.id,
+                            'shop_name': shop.name,
+                            'category': shop.category,
+                            'city': shop.city,
+                            'featured': shop.featured,
+                          });
+
                           context.pushNamed(
                             'shopDetail',
                             extra: shop,

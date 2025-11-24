@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../models/clubs_model.dart';
 import '../../../models/category.dart';
 import '/core/location/location_provider.dart'; // same as HomePage
+import '/core/analytics/analytics_service.dart'; // 👈 NEW
 
 /// Must match the `section` value used for clubs in your categories docs.
 const String kClubsSectionSlug = 'clubs';
@@ -36,6 +37,8 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
   @override
   void initState() {
     super.initState();
+    // 📊 Screen view
+    AnalyticsService.logView('ClubsPage');
     _loadCategories();
   }
 
@@ -241,6 +244,16 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                                           onSelected: (_) {
                                             setState(() =>
                                                 _areaFilter = "All Areas");
+
+                                            // 📊 Area filter changed → All
+                                            AnalyticsService.logEvent(
+                                              'club_area_filter_changed',
+                                              params: {
+                                                'area_name': 'All Areas',
+                                                'state_id': stateId ?? '',
+                                                'metro_id': metroId ?? '',
+                                              },
+                                            );
                                           },
                                         ),
                                       ),
@@ -254,6 +267,16 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                                             onSelected: (_) {
                                               setState(
                                                   () => _areaFilter = name);
+
+                                              // 📊 Area filter changed → Specific area
+                                              AnalyticsService.logEvent(
+                                                'club_area_filter_changed',
+                                                params: {
+                                                  'area_name': name,
+                                                  'state_id': stateId ?? '',
+                                                  'metro_id': metroId ?? '',
+                                                },
+                                              );
                                             },
                                           ),
                                         ),
@@ -303,6 +326,16 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                         onChanged: (v) {
                           if (v == null) return;
                           setState(() => _category = v);
+
+                          // 📊 Category filter changed
+                          AnalyticsService.logEvent(
+                            'club_category_filter_changed',
+                            params: {
+                              'category_name': v,
+                              'state_id': stateId ?? '',
+                              'metro_id': metroId ?? '',
+                            },
+                          );
                         },
                       ),
                     ],
@@ -389,6 +422,21 @@ class _ClubsPageState extends ConsumerState<ClubsPage> {
                             ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
+                              // 📊 User opened a club detail
+                              AnalyticsService.logEvent(
+                                'view_club_detail',
+                                params: {
+                                  'club_id': club.id,
+                                  'club_name': club.name,
+                                  'category_name': club.category,
+                                  'area_name': club.areaName,
+                                  'city': club.city,
+                                  'state': club.state,
+                                  'state_id': stateId ?? '',
+                                  'metro_id': metroId ?? '',
+                                },
+                              );
+
                               GoRouter.of(context).pushNamed(
                                 'clubDetail',
                                 extra: club,

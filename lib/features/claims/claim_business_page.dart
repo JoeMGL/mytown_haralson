@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/claim.dart';
+import '/core/analytics/analytics_service.dart';
 
 /// Lightweight view-model for a place, built directly from Firestore.
 /// This avoids depending on whatever your main Place model looks like.
@@ -71,6 +72,16 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
   @override
   void initState() {
     super.initState();
+
+    final section = widget.docPath.split('/').first;
+
+    // Screen view + page open event
+    AnalyticsService.logView('ClaimBusinessPage');
+    AnalyticsService.logEvent('claim_page_open', params: {
+      'doc_path': widget.docPath,
+      'section': section,
+    });
+
     _loadPlace();
   }
 
@@ -131,6 +142,8 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
   }
 
   void _nextStep() {
+    final section = widget.docPath.split('/').first;
+
     if (_step == 0 && _place?.claimed == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -138,9 +151,20 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
         ),
       );
       // still allow them to continue if they think it's an error
+      final fromStep = _step;
+      final toStep = _step + 1;
       setState(() {
-        _step++;
+        _step = toStep;
       });
+
+      AnalyticsService.logEvent('claim_step_advanced', params: {
+        'doc_path': widget.docPath,
+        'section': section,
+        'from_step': fromStep,
+        'to_step': toStep,
+        'was_already_claimed': true,
+      });
+
       return;
     }
 
@@ -149,17 +173,40 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
       return;
     }
 
+    final fromStep = _step;
+    final toStep = _step + 1;
+
     setState(() {
-      _step++;
+      _step = toStep;
+    });
+
+    AnalyticsService.logEvent('claim_step_advanced', params: {
+      'doc_path': widget.docPath,
+      'section': section,
+      'from_step': fromStep,
+      'to_step': toStep,
+      'was_already_claimed': _place?.claimed ?? false,
     });
   }
 
   void _prevStep() {
+    final section = widget.docPath.split('/').first;
+
     if (_step == 0) {
       Navigator.of(context).maybePop();
     } else {
+      final fromStep = _step;
+      final toStep = _step - 1;
+
       setState(() {
-        _step--;
+        _step = toStep;
+      });
+
+      AnalyticsService.logEvent('claim_step_back', params: {
+        'doc_path': widget.docPath,
+        'section': section,
+        'from_step': fromStep,
+        'to_step': toStep,
       });
     }
   }
@@ -194,6 +241,8 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
       final claimRef =
           FirebaseFirestore.instance.collection('claims').doc(); // auto ID
 
+      final section = widget.docPath.split('/').first;
+
       final claim = Claim(
         id: claimRef.id,
         placeId: place.id,
@@ -210,6 +259,21 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
         adminNotes: null,
         reviewedAt: null,
       );
+
+      // 📊 Log claim submission before writing
+      AnalyticsService.logEvent('claim_submit', params: {
+        'claim_id': claimRef.id,
+        'doc_path': widget.docPath,
+        'section': section,
+        'place_id': place.id,
+        'place_title': place.name,
+        'user_id': user.uid,
+        'user_email': user.email ?? '',
+        'owner_name': _ownerNameCtrl.text.trim(),
+        'owner_email': _ownerEmailCtrl.text.trim(),
+        'owner_phone_provided': _ownerPhoneCtrl.text.trim().isNotEmpty,
+        'verification_type': _verificationType,
+      });
 
       await claimRef.set(claim.toMap());
 
@@ -372,7 +436,16 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
         RadioListTile<String>(
           value: 'email',
           groupValue: _verificationType,
-          onChanged: (value) => setState(() => _verificationType = value!),
+          onChanged: (value) {
+            setState(() => _verificationType = value!);
+            AnalyticsService.logEvent(
+              'claim_verification_type_selected',
+              params: {
+                'doc_path': widget.docPath,
+                'verification_type': value!,
+              },
+            );
+          },
           title: const Text('Business email'),
           subtitle: const Text(
             'We\'ll send a confirmation to a business email address (e.g. you@yourshop.com).',
@@ -381,7 +454,16 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
         RadioListTile<String>(
           value: 'document',
           groupValue: _verificationType,
-          onChanged: (value) => setState(() => _verificationType = value!),
+          onChanged: (value) {
+            setState(() => _verificationType = value!);
+            AnalyticsService.logEvent(
+              'claim_verification_type_selected',
+              params: {
+                'doc_path': widget.docPath,
+                'verification_type': value!,
+              },
+            );
+          },
           title: const Text('Upload a document'),
           subtitle: const Text(
             'You\'ll upload a business license, utility bill, lease, or similar document.',
@@ -390,7 +472,16 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
         RadioListTile<String>(
           value: 'phone',
           groupValue: _verificationType,
-          onChanged: (value) => setState(() => _verificationType = value!),
+          onChanged: (value) {
+            setState(() => _verificationType = value!);
+            AnalyticsService.logEvent(
+              'claim_verification_type_selected',
+              params: {
+                'doc_path': widget.docPath,
+                'verification_type': value!,
+              },
+            );
+          },
           title: const Text('Phone number'),
           subtitle: const Text(
             'We\'ll verify using the business phone number listed on this page.',
@@ -399,7 +490,16 @@ class _ClaimBusinessPageState extends State<ClaimBusinessPage> {
         RadioListTile<String>(
           value: 'manual',
           groupValue: _verificationType,
-          onChanged: (value) => setState(() => _verificationType = value!),
+          onChanged: (value) {
+            setState(() => _verificationType = value!);
+            AnalyticsService.logEvent(
+              'claim_verification_type_selected',
+              params: {
+                'doc_path': widget.docPath,
+                'verification_type': value!,
+              },
+            );
+          },
           title: const Text('Manual review'),
           subtitle: const Text(
             'We\'ll review your claim manually if the other methods don\'t work.',

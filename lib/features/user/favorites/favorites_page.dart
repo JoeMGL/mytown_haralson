@@ -1,15 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:go_router/go_router.dart';
 
 import '../../../core/favorites/favorites_repository.dart';
-
 import '../../../widgets/favorite_button.dart';
+import '../../../core/analytics/analytics_service.dart'; // 👈 NEW
 
 import '../../../models/favorite.dart';
-
 import '../../../models/place.dart';
 import '../../../models/eat_and_drink.dart';
 import '../../../models/clubs_model.dart';
@@ -294,11 +292,23 @@ final resolvedFavoritesProvider =
   return results;
 });
 
-class FavoritesPage extends ConsumerWidget {
+class FavoritesPage extends ConsumerStatefulWidget {
   const FavoritesPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FavoritesPage> createState() => _FavoritesPageState();
+}
+
+class _FavoritesPageState extends ConsumerState<FavoritesPage> {
+  @override
+  void initState() {
+    super.initState();
+    // 📊 Screen view
+    AnalyticsService.logView('FavoritesPage');
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final resolvedAsync = ref.watch(resolvedFavoritesProvider);
     final cs = Theme.of(context).colorScheme;
 
@@ -527,6 +537,15 @@ class FavoritesPage extends ConsumerWidget {
     final type = rf.type;
     final id = rf.itemId;
     final db = FirebaseFirestore.instance;
+
+    // 📊 Analytics: user opened a saved item from the list
+    AnalyticsService.logEvent('favorite_open_from_list', params: {
+      'type': type,
+      'item_id': id,
+      'favorite_id': rf.favorite.id,
+      'has_image': (rf.imageUrl != null && rf.imageUrl!.isNotEmpty),
+      'has_subtitle': (rf.subtitle != null && rf.subtitle!.isNotEmpty),
+    });
 
     try {
       if (type == 'attraction') {

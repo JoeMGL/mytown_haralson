@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../features/auth/require_full_account.dart';
+import '/core/analytics/analytics_service.dart'; // 👈 NEW
 
 class ClaimBanner extends StatelessWidget {
   const ClaimBanner({
@@ -11,6 +12,10 @@ class ClaimBanner extends StatelessWidget {
     required this.docPath,
   });
 
+  /// Full Firestore doc path, e.g.:
+  /// - eatAndDrink/{id}
+  /// - shops/{id}
+  /// - lodging/{id}
   final String docPath;
 
   @override
@@ -43,12 +48,30 @@ class ClaimBanner extends StatelessWidget {
     final auth = FirebaseAuth.instance;
     final user = auth.currentUser;
 
+    // Derive "section" from docPath: e.g. "eatAndDrink/abc123" -> "eatAndDrink"
+    final section = docPath.split('/').first;
+
+    // 📊 Log that the user tapped "Claim"
+    AnalyticsService.logEvent('claim_banner_tap', params: {
+      'doc_path': docPath,
+      'section': section,
+      'is_anonymous': user == null ? true : user.isAnonymous,
+      'has_account': user != null && !user.isAnonymous,
+    });
+
     // No user or anonymous user → require account upgrade
     if (user == null || user.isAnonymous) {
       await requireFullAccount(
         context,
         action: (fullUser) async {
           // After user signs in or upgrades from anonymous:
+          AnalyticsService.logEvent('claim_banner_continue_after_upgrade',
+              params: {
+                'doc_path': docPath,
+                'section': section,
+                'user_id': fullUser.uid,
+              });
+
           context.push('/claim', extra: docPath);
         },
       );
@@ -56,6 +79,12 @@ class ClaimBanner extends StatelessWidget {
     }
 
     // Already full account → proceed directly
+    AnalyticsService.logEvent('claim_banner_continue', params: {
+      'doc_path': docPath,
+      'section': section,
+      'user_id': user.uid,
+    });
+
     context.push('/claim', extra: docPath);
   }
 }

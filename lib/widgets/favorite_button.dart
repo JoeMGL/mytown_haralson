@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../features/auth/require_full_account.dart';
+import '/core/analytics/analytics_service.dart';
 
 class FavoriteButton extends StatelessWidget {
   const FavoriteButton({
@@ -62,6 +63,17 @@ class FavoriteButton extends StatelessWidget {
   String get _favoriteDocId => '${type}_$itemId';
 
   Future<void> _handleToggle(BuildContext context) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    // 📊 Log the tap (before auth / toggle)
+    AnalyticsService.logEvent('favorite_toggle_tap', params: {
+      'type': type,
+      'item_id': itemId,
+      'favorite_doc_id': _favoriteDocId,
+      'had_user': currentUser != null,
+      'is_anonymous': currentUser?.isAnonymous ?? false,
+    });
+
     await requireFullAccount(
       context,
       action: (User user) async {
@@ -74,8 +86,10 @@ class FavoriteButton extends StatelessWidget {
             .doc(_favoriteDocId);
 
         final snap = await docRef.get();
+        final isFavoriteBefore = snap.exists;
+        final isFavoriteAfter = !isFavoriteBefore;
 
-        if (snap.exists) {
+        if (isFavoriteBefore) {
           // Already favorite → remove
           await docRef.delete();
         } else {
@@ -86,6 +100,15 @@ class FavoriteButton extends StatelessWidget {
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
+
+        // 📊 Log the result of the toggle
+        AnalyticsService.logEvent('favorite_toggled', params: {
+          'type': type,
+          'item_id': itemId,
+          'favorite_doc_id': _favoriteDocId,
+          'user_id': uid,
+          'is_favorite_after': isFavoriteAfter,
+        });
       },
     );
   }

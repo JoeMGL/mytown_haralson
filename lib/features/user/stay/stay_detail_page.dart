@@ -3,6 +3,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/lodging.dart';
 import '../../../widgets/favorite_button.dart';
+import '../../../widgets/claim_banner.dart';
+import '../../../core/analytics/analytics_service.dart';
 
 class StayDetailPage extends StatelessWidget {
   const StayDetailPage({
@@ -25,6 +27,9 @@ class StayDetailPage extends StatelessWidget {
       if (stay.metroName.isNotEmpty) stay.metroName,
       if (stay.areaName.isNotEmpty) stay.areaName,
     ].join(' • ');
+
+    final todayHoursText = _formatTodayHours(stay);
+    final weeklyLines = _formatWeeklyHours(stay);
 
     return Scaffold(
       appBar: AppBar(
@@ -86,8 +91,71 @@ class StayDetailPage extends StatelessWidget {
           // Address
           _buildAddressSection(context),
 
-          // Hours (structured first, legacy fallback)
-          _buildHoursSection(context),
+          // HOURS: today + optional full week
+          if (todayHoursText != null && todayHoursText.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.schedule, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    todayHoursText,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (weeklyLines.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: EdgeInsets.zero,
+              title: Text(
+                'Full week hours',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              children: weeklyLines
+                  .map(
+                    (line) => Padding(
+                      padding: const EdgeInsets.only(
+                        left: 32,
+                        right: 8,
+                        top: 2,
+                        bottom: 2,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          line,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ] else ...[
+            // Fallback legacy hours if no structured hours / weeklyLines
+            if (stay.hours != null && stay.hours!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.schedule, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      stay.hours!,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
 
           const SizedBox(height: 16),
 
@@ -100,26 +168,45 @@ class StayDetailPage extends StatelessWidget {
             const SizedBox(height: 16),
           ],
 
-          // ACTION BUTTONS
+          // ACTION BUTTONS + CLAIM
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               if (stay.phone != null && stay.phone!.isNotEmpty)
                 OutlinedButton.icon(
-                  onPressed: () => _launchPhone(stay.phone!),
+                  onPressed: () {
+                    AnalyticsService.logEvent('stay_call_tap', params: {
+                      'stay_id': stay.id,
+                      'stay_name': stay.name,
+                      'phone': stay.phone ?? '',
+                    });
+                    _launchPhone(stay.phone!);
+                  },
                   icon: const Icon(Icons.call),
                   label: const Text('Call'),
                 ),
               if (stay.website != null && stay.website!.isNotEmpty)
                 OutlinedButton.icon(
-                  onPressed: () => _launchUrl(stay.website!),
+                  onPressed: () {
+                    AnalyticsService.logEvent('stay_website_tap', params: {
+                      'stay_id': stay.id,
+                      'stay_name': stay.name,
+                      'url': stay.website ?? '',
+                    });
+                    _launchUrl(stay.website!);
+                  },
                   icon: const Icon(Icons.public),
                   label: const Text('Website'),
                 ),
               if (stay.mapQuery != null && stay.mapQuery!.isNotEmpty)
                 OutlinedButton.icon(
                   onPressed: () {
+                    AnalyticsService.logEvent('stay_map_tap', params: {
+                      'stay_id': stay.id,
+                      'stay_name': stay.name,
+                      'query': stay.mapQuery ?? '',
+                    });
                     final encoded = Uri.encodeComponent(stay.mapQuery!);
                     final url =
                         'https://www.google.com/maps/search/?api=1&query=$encoded';
@@ -128,6 +215,11 @@ class StayDetailPage extends StatelessWidget {
                   icon: const Icon(Icons.map_outlined),
                   label: const Text('Open in Maps'),
                 ),
+
+              // 🧾 Claim this business
+              ClaimBanner(
+                docPath: 'stays/${stay.id}',
+              ),
             ],
           ),
         ],
@@ -181,104 +273,101 @@ class StayDetailPage extends StatelessWidget {
     );
   }
 
-  // ---------- HOURS ----------
+  // ---------- HOURS HELPERS ----------
 
-  Widget _buildHoursSection(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    // Prefer structured hours if present
-    final hoursByDay = stay.hoursByDay;
-    if (hoursByDay != null && hoursByDay.isNotEmpty) {
-      final now = DateTime.now();
-      final weekdayKey = _weekdayKey(now.weekday);
-
-      final today = hoursByDay[weekdayKey];
-      String label;
-      if (today == null || today.closed) {
-        label = 'Closed today';
-      } else {
-        final open = today.open ?? '';
-        final close = today.close ?? '';
-        if (open.isEmpty && close.isEmpty) {
-          label = 'Hours not available';
-        } else if (open.isNotEmpty && close.isNotEmpty) {
-          label = '$open – $close';
-        } else {
-          label = (open + ' ' + close).trim();
-        }
-      }
-
-      return Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.schedule, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Today's hours",
-                    style: textTheme.bodySmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    label,
-                    style: textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
+  /// Short "today" hours string using structured hours if present,
+  /// otherwise falls back to legacy `stay.hours`.
+  String? _formatTodayHours(Stay stay) {
+    final map = stay.hoursByDay;
+    if (map == null || map.isEmpty) {
+      // fallback to legacy string
+      return stay.hours;
     }
 
-    // Fallback: legacy free-text hours string
-    if (stay.hours != null && stay.hours!.isNotEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.schedule, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                stay.hours!,
-                style: textTheme.bodyMedium,
-              ),
-            ),
-          ],
-        ),
-      );
+    final now = DateTime.now();
+    final weekdayKey = _weekdayKey(now.weekday);
+
+    final day = map[weekdayKey];
+    if (day == null || day.closed) {
+      return 'Closed today';
     }
 
-    return const SizedBox.shrink();
+    final open = (day.open ?? '').trim();
+    final close = (day.close ?? '').trim();
+
+    if (open.isEmpty && close.isEmpty) {
+      return 'Open today';
+    } else if (open.isNotEmpty && close.isNotEmpty) {
+      return 'Today: $open – $close';
+    } else if (open.isNotEmpty) {
+      return 'Today: from $open';
+    } else {
+      return 'Today: until $close';
+    }
   }
 
+  /// Full week lines like "Mon: 9:00 AM – 5:00 PM"
+  List<String> _formatWeeklyHours(Stay stay) {
+    final map = stay.hoursByDay;
+    if (map == null || map.isEmpty) return const [];
+
+    const dayOrder = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    const labels = <String, String>{
+      'mon': 'Mon',
+      'tue': 'Tue',
+      'wed': 'Wed',
+      'thu': 'Thu',
+      'fri': 'Fri',
+      'sat': 'Sat',
+      'sun': 'Sun',
+    };
+
+    final lines = <String>[];
+
+    for (final key in dayOrder) {
+      final label = labels[key] ?? key;
+      final day = map[key];
+
+      if (day == null || day.closed) {
+        lines.add('$label: Closed');
+        continue;
+      }
+
+      final open = (day.open ?? '').trim();
+      final close = (day.close ?? '').trim();
+
+      if (open.isEmpty && close.isEmpty) {
+        lines.add('$label: Open');
+      } else if (open.isNotEmpty && close.isNotEmpty) {
+        lines.add('$label: $open – $close');
+      } else if (open.isNotEmpty) {
+        lines.add('$label: from $open');
+      } else {
+        lines.add('$label: until $close');
+      }
+    }
+
+    return lines;
+  }
+
+  /// IMPORTANT: use 'mon', 'tue', ... to match how you're storing hoursByDay
   String _weekdayKey(int weekday) {
     switch (weekday) {
       case DateTime.monday:
-        return 'monday';
+        return 'mon';
       case DateTime.tuesday:
-        return 'tuesday';
+        return 'tue';
       case DateTime.wednesday:
-        return 'wednesday';
+        return 'wed';
       case DateTime.thursday:
-        return 'thursday';
+        return 'thu';
       case DateTime.friday:
-        return 'friday';
+        return 'fri';
       case DateTime.saturday:
-        return 'saturday';
+        return 'sat';
       case DateTime.sunday:
       default:
-        return 'sunday';
+        return 'sun';
     }
   }
 

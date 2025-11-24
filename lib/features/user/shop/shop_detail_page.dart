@@ -3,6 +3,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/shop.dart';
 import '../../../widgets/favorite_button.dart';
+import '../../../widgets/claim_banner.dart';
+import '../../../core/analytics/analytics_service.dart';
 
 class ShopDetailPage extends StatelessWidget {
   const ShopDetailPage({
@@ -129,19 +131,52 @@ class ShopDetailPage extends StatelessWidget {
             children: [
               if (shop.phone != null && shop.phone!.isNotEmpty)
                 OutlinedButton.icon(
-                  onPressed: () => _launchPhone(shop.phone!),
+                  onPressed: () {
+                    // 📊 Analytics: Call tap
+                    AnalyticsService.logEvent('shop_call_tap', params: {
+                      'shop_id': shop.id,
+                      'shop_name': shop.name,
+                      'phone': shop.phone ?? '',
+                      'city': shop.city,
+                      'category': shop.category,
+                    });
+
+                    _launchPhone(shop.phone!);
+                  },
                   icon: const Icon(Icons.call),
                   label: const Text('Call'),
                 ),
               if (shop.website != null && shop.website!.isNotEmpty)
                 OutlinedButton.icon(
-                  onPressed: () => _launchUrl(shop.website!),
+                  onPressed: () {
+                    // 📊 Analytics: Website tap
+                    AnalyticsService.logEvent('shop_website_tap', params: {
+                      'shop_id': shop.id,
+                      'shop_name': shop.name,
+                      'url': shop.website ?? '',
+                      'city': shop.city,
+                      'category': shop.category,
+                    });
+
+                    _launchUrl(shop.website!);
+                  },
                   icon: const Icon(Icons.public),
                   label: const Text('Website'),
                 ),
               if (shop.facebook != null && shop.facebook!.isNotEmpty)
                 OutlinedButton.icon(
-                  onPressed: () => _launchUrl(shop.facebook!),
+                  onPressed: () {
+                    // 📊 Analytics: Facebook tap
+                    AnalyticsService.logEvent('shop_facebook_tap', params: {
+                      'shop_id': shop.id,
+                      'shop_name': shop.name,
+                      'url': shop.facebook ?? '',
+                      'city': shop.city,
+                      'category': shop.category,
+                    });
+
+                    _launchUrl(shop.facebook!);
+                  },
                   icon: const Icon(Icons.facebook),
                   label: const Text('Facebook'),
                 ),
@@ -151,11 +186,26 @@ class ShopDetailPage extends StatelessWidget {
                     final encoded = Uri.encodeComponent(shop.address);
                     final url =
                         'https://www.google.com/maps/search/?api=1&query=$encoded';
+
+                    // 📊 Analytics: Map tap
+                    AnalyticsService.logEvent('shop_map_tap', params: {
+                      'shop_id': shop.id,
+                      'shop_name': shop.name,
+                      'address': shop.address,
+                      'city': shop.city,
+                      'category': shop.category,
+                    });
+
                     _launchUrl(url);
                   },
                   icon: const Icon(Icons.map_outlined),
                   label: const Text('Open in Maps'),
                 ),
+
+              // 📣 Claim banner (shops can be claimed too)
+              ClaimBanner(
+                docPath: 'shops/${shop.id}',
+              ),
             ],
           ),
         ],

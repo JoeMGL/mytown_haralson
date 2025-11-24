@@ -6,6 +6,7 @@ import '../../../models/event.dart';
 import '../../../models/category.dart';
 import '/core/location/location_provider.dart';
 import 'event_detail_page.dart';
+import '../../../core/analytics/analytics_service.dart'; // 👈 NEW
 
 enum EventFilter { all, today, weekend, upcoming }
 
@@ -67,6 +68,8 @@ class _EventsPageState extends ConsumerState<EventsPage> {
   @override
   void initState() {
     super.initState();
+    // 📊 Screen view
+    AnalyticsService.logView('EventsPage');
     _loadCategories();
   }
 
@@ -202,6 +205,17 @@ class _EventsPageState extends ConsumerState<EventsPage> {
                                   label: Text(area.name),
                                   onSelected: (_) {
                                     setState(() => _selectedAreaId = area.id);
+
+                                    // 📊 Area filter change
+                                    AnalyticsService.logEvent(
+                                      'events_area_filter_changed',
+                                      params: {
+                                        'state_id': loc.stateId ?? '',
+                                        'metro_id': loc.metroId ?? '',
+                                        'area_id': area.id,
+                                        'area_name': area.name,
+                                      },
+                                    );
                                   },
                                 );
                               }).toList(),
@@ -220,7 +234,7 @@ class _EventsPageState extends ConsumerState<EventsPage> {
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _buildCategoryChips(cs),
+                      child: _buildCategoryChips(cs, loc.stateId, loc.metroId),
                     ),
 
                     const SizedBox(height: 20),
@@ -247,6 +261,16 @@ class _EventsPageState extends ConsumerState<EventsPage> {
                                 selected: selected,
                                 onSelected: (_) {
                                   setState(() => _filter = f);
+
+                                  // 📊 Time filter change
+                                  AnalyticsService.logEvent(
+                                    'events_time_filter_changed',
+                                    params: {
+                                      'state_id': loc.stateId ?? '',
+                                      'metro_id': loc.metroId ?? '',
+                                      'filter': f.name,
+                                    },
+                                  );
                                 },
                                 selectedColor:
                                     cs.primary.withValues(alpha: .12),
@@ -353,6 +377,23 @@ class _EventsPageState extends ConsumerState<EventsPage> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
+                            // 📊 Event detail view
+                            AnalyticsService.logEvent(
+                              'view_event_detail',
+                              params: {
+                                'event_id': event.id,
+                                'event_title': event.title,
+                                'category_slug': event.category,
+                                'area_id': event.areaId,
+                                'city': event.city,
+                                'state': event.state,
+                                'state_id': loc.stateId ?? '',
+                                'metro_id': loc.metroId ?? '',
+                                'start': event.start.toIso8601String(),
+                                'end': event.end.toIso8601String(),
+                              },
+                            );
+
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => EventDetailPage(
@@ -447,7 +488,11 @@ class _EventsPageState extends ConsumerState<EventsPage> {
   }
 
   // Category chips widget
-  Widget _buildCategoryChips(ColorScheme cs) {
+  Widget _buildCategoryChips(
+    ColorScheme cs,
+    String? stateId,
+    String? metroId,
+  ) {
     if (_loadingCategories) {
       return const LinearProgressIndicator();
     }
@@ -469,6 +514,17 @@ class _EventsPageState extends ConsumerState<EventsPage> {
           label: Text(cat.label),
           onSelected: (_) {
             setState(() => _selectedCategorySlug = cat.slug);
+
+            // 📊 Category filter change
+            AnalyticsService.logEvent(
+              'events_category_filter_changed',
+              params: {
+                'state_id': stateId ?? '',
+                'metro_id': metroId ?? '',
+                'category_slug': cat.slug,
+                'category_label': cat.label,
+              },
+            );
           },
         );
       }).toList(),

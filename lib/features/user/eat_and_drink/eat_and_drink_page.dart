@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/eat_and_drink.dart';
 import '/core/location/location_provider.dart';
+import '/core/analytics/analytics_service.dart';
 
 class EatAndDrinkPage extends ConsumerStatefulWidget {
   const EatAndDrinkPage({super.key});
@@ -47,6 +48,10 @@ class _EatAndDrinkPageState extends ConsumerState<EatAndDrinkPage> {
   @override
   void initState() {
     super.initState();
+
+    // 🔹 Log screen view for Eat & Drink list
+    AnalyticsService.logView('EatAndDrinkPage');
+
     _loadCategories();
   }
 
@@ -173,6 +178,15 @@ class _EatAndDrinkPageState extends ConsumerState<EatAndDrinkPage> {
                                   label: Text(area.name),
                                   onSelected: (_) {
                                     setState(() => _selectedAreaId = area.id);
+
+                                    // 🔹 Log area filter change
+                                    AnalyticsService.logEvent(
+                                      'eat_area_filter_changed',
+                                      params: {
+                                        'area_id': area.id,
+                                        'area_name': area.name,
+                                      },
+                                    );
                                   },
                                 );
                               }).toList(),
@@ -205,6 +219,15 @@ class _EatAndDrinkPageState extends ConsumerState<EatAndDrinkPage> {
                                   onSelected: (_) {
                                     setState(
                                         () => _selectedCategorySlug = cat.slug);
+
+                                    // 🔹 Log category filter change
+                                    AnalyticsService.logEvent(
+                                      'eat_category_filter_changed',
+                                      params: {
+                                        'category_slug': cat.slug,
+                                        'category_label': cat.label,
+                                      },
+                                    );
                                   },
                                 );
                               }).toList(),
@@ -297,6 +320,23 @@ class _EatAndDrinkPageState extends ConsumerState<EatAndDrinkPage> {
 
                       return GestureDetector(
                         onTap: () {
+                          // 🔹 Log tap on a specific Eat & Drink place
+                          AnalyticsService.logEvent(
+                            'view_eat_detail',
+                            params: {
+                              'place_id': place.id,
+                              'place_name': place.name,
+                              'category_slug': place.category,
+                              'area_id': place.areaId,
+                              'area_name': place.areaName,
+                              'city': place.city,
+                              'state_id':
+                                  loc.stateId ?? '', // 👈 fix: make non-null
+                              'metro_id':
+                                  loc.metroId ?? '', // 👈 fix: make non-null
+                            },
+                          );
+
                           context.pushNamed(
                             'eatDetail',
                             extra: place,

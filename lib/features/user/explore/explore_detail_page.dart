@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/place.dart';
-import '../../../widgets/favorite_button.dart'; // ⬅️ NEW
+import '../../../widgets/favorite_button.dart'; // ⬅️ existing
+import '/core/analytics/analytics_service.dart'; // ⬅️ NEW
 
 class ExploreDetailPage extends StatelessWidget {
   const ExploreDetailPage({
@@ -123,6 +124,13 @@ class ExploreDetailPage extends StatelessWidget {
               if (place.mapQuery != null && place.mapQuery!.isNotEmpty)
                 OutlinedButton.icon(
                   onPressed: () {
+                    // 📊 Analytics: user tapped Open in Maps (with stored query)
+                    AnalyticsService.logEvent('explore_map_tap', params: {
+                      'place_id': place.id,
+                      'place_name': place.title,
+                      'query': place.mapQuery ?? '',
+                    });
+
                     final encoded = Uri.encodeComponent(place.mapQuery!);
                     final url =
                         'https://www.google.com/maps/search/?api=1&query=$encoded';
@@ -134,6 +142,13 @@ class ExploreDetailPage extends StatelessWidget {
               else
                 OutlinedButton.icon(
                   onPressed: () {
+                    // 📊 Analytics: user tapped Search in Maps (fallback to title)
+                    AnalyticsService.logEvent('explore_map_search_tap',
+                        params: {
+                          'place_id': place.id,
+                          'place_name': place.title,
+                        });
+
                     final encoded = Uri.encodeComponent(place.title);
                     final url =
                         'https://www.google.com/maps/search/?api=1&query=$encoded';

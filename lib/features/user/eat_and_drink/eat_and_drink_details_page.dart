@@ -5,14 +5,39 @@ import '../../../models/eat_and_drink.dart';
 
 import '../../../widgets/claim_banner.dart';
 import '../../../widgets/favorite_button.dart';
+import '../../../core/analytics/analytics_service.dart';
 
-class EatAndDrinkDetailsPage extends StatelessWidget {
+class EatAndDrinkDetailsPage extends StatefulWidget {
   const EatAndDrinkDetailsPage({
     super.key,
     required this.place,
   });
 
   final EatAndDrink place;
+
+  @override
+  State<EatAndDrinkDetailsPage> createState() => _EatAndDrinkDetailsPageState();
+}
+
+class _EatAndDrinkDetailsPageState extends State<EatAndDrinkDetailsPage> {
+  EatAndDrink get place => widget.place;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // 📊 Screen view + detail event
+    AnalyticsService.logView('EatAndDrinkDetailsPage');
+    AnalyticsService.logEvent('view_eat_detail', params: {
+      'place_id': place.id,
+      'place_name': place.name,
+      'category_slug': place.category,
+      'city': place.city,
+      'state_name': place.stateName,
+      'metro_name': place.metroName,
+      'area_name': place.areaName,
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -169,19 +194,44 @@ class EatAndDrinkDetailsPage extends StatelessWidget {
             children: [
               if (place.phone != null && place.phone!.isNotEmpty)
                 OutlinedButton.icon(
-                  onPressed: () => _launchPhone(place.phone!),
+                  onPressed: () {
+                    // 🔹 Analytics: user tapped Call
+                    AnalyticsService.logEvent('eat_call_tap', params: {
+                      'place_id': place.id,
+                      'place_name': place.name,
+                      'phone': place.phone ?? '',
+                    });
+
+                    _launchPhone(place.phone!);
+                  },
                   icon: const Icon(Icons.call),
                   label: const Text('Call'),
                 ),
               if (place.website != null && place.website!.isNotEmpty)
                 OutlinedButton.icon(
-                  onPressed: () => _launchUrl(place.website!),
+                  onPressed: () {
+                    // 🔹 Analytics: user tapped Website
+                    AnalyticsService.logEvent('eat_website_tap', params: {
+                      'place_id': place.id,
+                      'place_name': place.name,
+                      'url': place.website ?? '',
+                    });
+
+                    _launchUrl(place.website!);
+                  },
                   icon: const Icon(Icons.public),
                   label: const Text('Website'),
                 ),
               if (place.mapQuery != null && place.mapQuery!.isNotEmpty)
                 OutlinedButton.icon(
                   onPressed: () {
+                    // 🔹 Analytics: user tapped Maps
+                    AnalyticsService.logEvent('eat_map_tap', params: {
+                      'place_id': place.id,
+                      'place_name': place.name,
+                      'query': place.mapQuery ?? '',
+                    });
+
                     final encoded = Uri.encodeComponent(place.mapQuery!);
                     final url =
                         'https://www.google.com/maps/search/?api=1&query=$encoded';

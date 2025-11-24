@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '/core/analytics/analytics_service.dart';
+
 import '../../../models/place.dart';
 import '../../../models/category.dart';
 import '../../../models/section.dart';
@@ -52,6 +54,8 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
   @override
   void initState() {
     super.initState();
+    // 📊 Screen view
+    AnalyticsService.logView('ExplorePage');
     _loadSection();
     _loadCategories();
   }
@@ -390,6 +394,20 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
                           ),
                           child: InkWell(
                             onTap: () {
+                              // 📊 User opened an Explore detail
+                              AnalyticsService.logEvent(
+                                'view_explore_detail',
+                                params: {
+                                  'place_id': place.id,
+                                  'place_name': place.name,
+                                  'category_slug': place.category,
+                                  'city': place.city,
+                                  'state_name': place.stateName,
+                                  'metro_name': place.metroName,
+                                  'area_name': place.areaName,
+                                },
+                              );
+
                               context.pushNamed(
                                 'exploreDetail',
                                 extra: place,
@@ -530,6 +548,12 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           selected: _selectedAreaId == null,
           onSelected: (_) {
             setState(() => _selectedAreaId = null);
+
+            // 📊 Area filter changed → All
+            AnalyticsService.logEvent('explore_area_filter_changed', params: {
+              'area_id': '',
+              'area_name': 'All Areas',
+            });
           },
         ),
         ..._areas.map((area) {
@@ -539,6 +563,12 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
             selected: selected,
             onSelected: (_) {
               setState(() => _selectedAreaId = area.id);
+
+              // 📊 Area filter changed → Specific area
+              AnalyticsService.logEvent('explore_area_filter_changed', params: {
+                'area_id': area.id,
+                'area_name': area.name,
+              });
             },
           );
         }),
@@ -585,6 +615,15 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
           selected: _selectedCategorySlug == null,
           onSelected: (_) {
             setState(() => _selectedCategorySlug = null);
+
+            // 📊 Category filter changed → All
+            AnalyticsService.logEvent(
+              'explore_category_filter_changed',
+              params: {
+                'category_slug': 'all',
+                'category_label': 'All',
+              },
+            );
           },
         ),
         // One chip per category from Firestore
@@ -595,6 +634,15 @@ class _ExplorePageState extends ConsumerState<ExplorePage> {
             selected: selected,
             onSelected: (_) {
               setState(() => _selectedCategorySlug = cat.slug);
+
+              // 📊 Category filter changed → Specific category
+              AnalyticsService.logEvent(
+                'explore_category_filter_changed',
+                params: {
+                  'category_slug': cat.slug,
+                  'category_label': cat.name,
+                },
+              );
             },
           );
         }),

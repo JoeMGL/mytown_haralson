@@ -1,11 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../models/lodging.dart';
 import '../../../models/category.dart';
 import '/core/location/location_provider.dart';
+
+// ⭐ NEW
+import '../../../widgets/favorite_button.dart';
+import '../../../core/analytics/analytics_service.dart';
 
 class StayPage extends ConsumerStatefulWidget {
   const StayPage({super.key});
@@ -47,6 +51,8 @@ class _StayPageState extends ConsumerState<StayPage> {
   @override
   void initState() {
     super.initState();
+    // 📊 Analytics: screen view
+    AnalyticsService.logView('StayPage');
     _loadCategories();
   }
 
@@ -304,6 +310,18 @@ class _StayPageState extends ConsumerState<StayPage> {
 
                       return GestureDetector(
                         onTap: () {
+                          // 📊 Analytics: user opened stay detail
+                          AnalyticsService.logEvent('view_stay_detail',
+                              params: {
+                                'stay_id': stay.id,
+                                'stay_name': stay.name,
+                                'category': stay.category,
+                                'city': stay.city,
+                                'state_name': stay.stateName,
+                                'metro_name': stay.metroName,
+                                'area_name': stay.areaName,
+                              });
+
                           context.pushNamed(
                             'stayDetail',
                             extra: stay,
@@ -364,11 +382,20 @@ class _StayPageState extends ConsumerState<StayPage> {
                                               ),
                                             ),
                                             if (stay.featured)
-                                              Icon(
-                                                Icons.star,
-                                                size: 18,
-                                                color: cs.primary,
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 4.0),
+                                                child: Icon(
+                                                  Icons.star,
+                                                  size: 18,
+                                                  color: cs.primary,
+                                                ),
                                               ),
+                                            // ⭐ Favorite toggle for stays
+                                            FavoriteButton(
+                                              type: 'lodging',
+                                              itemId: stay.id,
+                                            ),
                                           ],
                                         ),
                                         const SizedBox(height: 4),
