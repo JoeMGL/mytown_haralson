@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/event.dart';
+import '../../../widgets/favorite_button.dart';
 
 class EventDetailPage extends StatelessWidget {
   const EventDetailPage({
@@ -48,7 +49,16 @@ class EventDetailPage extends StatelessWidget {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text(event.title)),
+      appBar: AppBar(
+        title: Text(event.title),
+        actions: [
+          // ⭐ Favorite button in the app bar
+          FavoriteButton(
+            type: 'event', // or 'explore' if you prefer
+            itemId: event.id,
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

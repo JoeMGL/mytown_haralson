@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../models/eat_and_drink.dart';
 
 import '../../../widgets/claim_banner.dart';
+import '../../../widgets/favorite_button.dart';
 
 class EatAndDrinkDetailsPage extends StatelessWidget {
   const EatAndDrinkDetailsPage({
@@ -32,6 +33,13 @@ class EatAndDrinkDetailsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(place.name),
+        actions: [
+          // ⭐ Favorite button in the app bar
+          FavoriteButton(
+            type: 'eat_and_drink', // or 'explore' if you prefer
+            itemId: place.id,
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

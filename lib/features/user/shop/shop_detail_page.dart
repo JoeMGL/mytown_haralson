@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/shop.dart';
+import '../../../widgets/favorite_button.dart';
 
 class ShopDetailPage extends StatelessWidget {
   const ShopDetailPage({
@@ -26,6 +27,13 @@ class ShopDetailPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(shop.name),
+        actions: [
+          // ⭐ Favorite button in the app bar
+          FavoriteButton(
+            type: 'shop', // or 'explore' if you prefer
+            itemId: shop.id,
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

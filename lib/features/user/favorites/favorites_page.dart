@@ -2,9 +2,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:go_router/go_router.dart';
+
 import '../../../core/favorites/favorites_repository.dart';
-import '../../../models/favorite.dart';
+
 import '../../../widgets/favorite_button.dart';
+
+import '../../../models/favorite.dart';
+
+import '../../../models/place.dart';
+import '../../../models/eat_and_drink.dart';
+import '../../../models/clubs_model.dart';
+import '../../../models/lodging.dart';
+import '../../../models/shop.dart';
 
 /// View-model that joins a Favorite with its underlying item data.
 class ResolvedFavorite {
@@ -54,7 +64,7 @@ final resolvedFavoritesProvider =
   final eats = <Favorite>[];
   final attractions = <Favorite>[];
   final clubs = <Favorite>[];
-  final other = <Favorite>[];
+  final other = <Favorite>[]; // includes lodging + shop for now
 
   for (final fav in favorites) {
     switch (fav.type) {
@@ -69,6 +79,10 @@ final resolvedFavoritesProvider =
         break;
       case 'club':
         clubs.add(fav);
+        break;
+      case 'lodging':
+      case 'shop':
+        other.add(fav); // generic handling for now
         break;
       default:
         other.add(fav);
@@ -510,26 +524,86 @@ class FavoritesPage extends ConsumerWidget {
     return '${dt.month}/${dt.day}/${dt.year}';
   }
 
-  void _handleTap(BuildContext context, ResolvedFavorite rf) {
+  Future<void> _handleTap(BuildContext context, ResolvedFavorite rf) async {
     final type = rf.type;
     final id = rf.itemId;
+    final db = FirebaseFirestore.instance;
 
-    // TODO: Wire these up to your actual GoRouter / Navigator routes.
-    //
-    // Example with GoRouter:
-    //
-    // if (type == 'event') {
-    //   context.push('/events/$id');
-    // } else if (type == 'attraction') {
-    //   context.push('/explore/$id');
-    // } else if (type == 'eat_and_drink') {
-    //   context.push('/eat-and-drink/$id');
-    // } else if (type == 'club') {
-    //   context.push('/clubs/$id');
-    // }
+    try {
+      if (type == 'attraction') {
+        // 🔹 Load Place from Firestore and go to ExploreDetailPage
+        final doc = await db.collection('places').doc(id).get();
+        if (!doc.exists) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('This attraction is no longer available.')),
+          );
+          return;
+        }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('TODO: open $type detail for $id')),
-    );
+        final place = Place.fromFirestore(doc);
+        context.pushNamed(
+          'exploreDetail', // from router: path 'explore/detail'
+          extra: place,
+        );
+      } else if (type == 'eat_and_drink') {
+        // 🔹 Load EatAndDrink and go to EatAndDrinkDetailsPage
+        final doc = await db.collection('eatAndDrink').doc(id).get();
+        if (!doc.exists) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('This place is no longer available.')),
+          );
+          return;
+        }
+
+        final eat = EatAndDrink.fromDoc(doc);
+        context.pushNamed(
+          'eatDetail', // from router: /eat/detail
+          extra: eat,
+        );
+      } else if (type == 'club') {
+        // 🔹 Load Club and go to ClubDetailPage
+        final doc = await db.collection('clubs').doc(id).get();
+        if (!doc.exists) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('This club is no longer available.')),
+          );
+          return;
+        }
+
+        // Assuming you have a similar factory: Club.fromDoc(...)
+        final club = Club.fromDoc(doc);
+        context.pushNamed(
+          'clubDetail', // from router: /clubs/detail
+          extra: club,
+        );
+      } else if (type == 'lodging') {
+        final doc = await db.collection('lodging').doc(id).get();
+        if (!doc.exists) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('This stay is no longer available.')),
+          );
+          return;
+        }
+
+        final stay = Stay.fromDoc(doc);
+        context.pushNamed(
+          'stayDetail',
+          extra: stay,
+        );
+      } else if (type == 'shop') {
+        context.pushNamed('shop');
+      } else if (type == 'event') {
+        context.push('/events');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No detail page wired for type "$type".')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open this item right now.')),
+      );
+    }
   }
 }

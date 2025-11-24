@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../../models/clubs_model.dart';
+import '../../../widgets/favorite_button.dart';
 
 class ClubDetailPage extends StatelessWidget {
   const ClubDetailPage({super.key, required this.club});
@@ -61,6 +62,14 @@ class ClubDetailPage extends StatelessWidget {
           SliverAppBar(
             pinned: true,
             expandedHeight: hasBanner ? 220 : 120,
+            actions: [
+              FavoriteButton(
+                type: 'club',
+                itemId: club.id,
+                size: 26,
+              ),
+              const SizedBox(width: 12),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               title: Text(
                 club.name,
